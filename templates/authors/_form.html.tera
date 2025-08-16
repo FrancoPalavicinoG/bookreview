@@ -27,6 +27,12 @@
         <textarea name="description" rows="2" placeholder="Short bio">{{ author.description | default(value="") }}</textarea>
       </label>
     </div>
+    <div class="row" style="margin-top: 8px;">
+      <label>
+        <div>Date of birth</div>
+        <input type="date" name="date_of_birth" value="{{ author.date_of_birth | default(value="") }}" />
+      </label>
+    </div>
     <div style="margin-top: 8px;">
       <button type="submit">{{ button_text }}</button>
     </div>

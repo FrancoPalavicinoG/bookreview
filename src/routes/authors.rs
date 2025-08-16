@@ -9,7 +9,7 @@ use serde::Serialize;                          // Para serializar structs hacia 
 
 use futures_util::TryStreamExt;                // Para iterar cursores async de Mongo
 use mongodb::{
-    bson::{doc, oid::ObjectId},                // doc! para filtros BSON; ObjectId para _id
+    bson::{doc, oid::ObjectId},
     Collection,                                // Tipo de colección tipada
 };
 
@@ -32,6 +32,7 @@ pub struct AuthorForm {
     pub name: String,
     pub country: Option<String>,
     pub description: Option<String>,
+    pub date_of_birth: Option<String>,
     // date_of_birth: Option<String>, // Se podría agregar luego con un parse a bson::DateTime
 }
 
@@ -43,6 +44,7 @@ struct AuthorView {
     name: String,
     country: Option<String>,
     description: Option<String>,
+    date_of_birth: Option<String>,
 }
 
 // Contexto que enviamos al template de índice.
@@ -86,6 +88,7 @@ pub async fn index(state: &State<AppState>, q: Option<String>) -> Template {
                 name: a.name,
                 country: a.country,
                 description: a.description,
+                date_of_birth: a.date_of_birth,
             });
         }
     }
@@ -106,7 +109,7 @@ pub async fn create(state: &State<AppState>, form: Form<AuthorForm>) -> Template
     let a = Author {
         id: None,
         name: f.name,
-        date_of_birth: None, // parsearíamos si el form enviara fecha
+        date_of_birth: f.date_of_birth,
         country: f.country,
         description: f.description,
     };
@@ -143,6 +146,7 @@ pub async fn edit(state: &State<AppState>, id: &str) -> Template {
                     name: a.name,
                     country: a.country,
                     description: a.description,
+                    date_of_birth: a.date_of_birth,
                 };
                 return Template::render("authors/edit", &AuthorCtx { author: view });
             }
@@ -162,6 +166,9 @@ pub async fn update(state: &State<AppState>, id: &str, form: Form<AuthorForm>) -
         let mut set_doc = doc! { "name": f.name };
         if let Some(country) = f.country { set_doc.insert("country", country); }
         if let Some(desc) = f.description { set_doc.insert("description", desc); }
+        if let Some(dob_str) = f.date_of_birth {
+            set_doc.insert("date_of_birth", dob_str);
+        }
         let _ = c.find_one_and_update(doc! {"_id": oid}, doc! {"$set": set_doc}).await;
     }
     Redirect::to("/authors")
@@ -188,6 +195,7 @@ pub async fn read(state: &State<AppState>, id: &str) -> Template {
                     name: a.name,
                     country: a.country,
                     description: a.description,
+                    date_of_birth: a.date_of_birth,
                 };
                 return Template::render("authors/read", &AuthorCtx { author: view });
             }
