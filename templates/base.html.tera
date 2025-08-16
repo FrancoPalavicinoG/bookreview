@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}BookReview{% endblock title %}</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
+    header { margin-bottom: 16px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; }
+    form.inline { display: inline; }
+    .row { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
+    .card { border: 1px solid #eee; padding: 16px; border-radius: 12px; }
+    input, select, textarea, button { padding: 8px 10px; border: 1px solid #ccc; border-radius: 8px; }
+    button { cursor: pointer; }
+    .muted { color: #666; }
+    .danger { color: #b00020; }
+    .success { color: #1b5e20; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>BookReview</h1>
+    <nav>
+      <a href="/authors">Authors</a>
+      <!-- agrega más links luego -->
+    </nav>
+  </header>
+
+  {% set msg = message | default(value="") %}
+  {% if msg != "" %}
+    <p class="success">{{ msg }}</p>
+  {% endif %}
+
+  {% block content %}{% endblock content %}
+</body>
+</html>

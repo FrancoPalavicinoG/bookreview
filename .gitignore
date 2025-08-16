@@ -1,0 +1,38 @@
+# --- Rust / Cargo ---
+/target/
+/**/*.rs.bk
+
+# Artefactos de depuración / perfiles
+*.pdb
+*.dSYM/
+*.profraw
+*.profdata
+
+# Cobertura
+/coverage/
+/target/llvm-cov/
+
+# --- Config/secretos ---
+.env
+.env.*
+!.env.example
+Rocket.local.toml
+
+# --- Docker / datos locales ---
+docker-data/
+mongo_data/
+
+# --- Logs ---
+logs/
+*.log
+
+# --- SO / Editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- Misceláneos ---
+*.swp
+*.swo
+*~

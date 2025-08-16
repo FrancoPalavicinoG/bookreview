@@ -1,0 +1,21 @@
+[package]
+name = "bookreview"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Web framework
+rocket = { version = "0.5", features = ["json"] }
+rocket_dyn_templates = { version = "0.2", features = ["tera"] }
+
+# MongoDB + tipos/serde
+mongodb = "3"
+bson = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+dotenvy = "0.15"
+
+# Utilidades
+futures-util = "0.3"   # TryStreamExt para iterar cursores
+rocket_cors = "0.6"    # CORS sencillo para fetch desde la UI

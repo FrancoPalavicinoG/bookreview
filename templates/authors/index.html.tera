@@ -1,0 +1,99 @@
+{% extends "base" %}
+{% block title %}Authors · BookReview{% endblock title %}
+
+{% block content %}
+  {% set qv = q | default(value="") %}
+  <div class="row">
+    {% if editing %}
+      <div class="card" style="flex: 1;">
+        <h2>Edit author</h2>
+        <form action="/authors/update/{{ editing.id }}" method="post">
+          <div class="row">
+            <label>
+              <div>Name</div>
+              <input name="name" value="{{ editing.name }}" required />
+            </label>
+            <label>
+              <div>Country</div>
+              <input name="country" value="{{ editing.country | default(value="") }}" />
+            </label>
+          </div>
+          <div style="margin-top: 8px;">
+            <label style="width: 100%; display: block;">
+              <div>Description</div>
+              <textarea name="description" rows="2">{{ editing.description | default(value="") }}</textarea>
+            </label>
+          </div>
+          <div style="margin-top: 8px;">
+            <button type="submit">Save</button>
+            <a href="/authors" class="muted" style="margin-left: 8px;">Cancel</a>
+          </div>
+        </form>
+      </div>
+    {% endif %}
+    <div class="card" style="flex: 1;">
+      <h2>New author</h2>
+      <form action="/authors/create" method="post">
+        <div class="row">
+          <label>
+            <div>Name</div>
+            <input name="name" placeholder="Name" required />
+          </label>
+          <label>
+            <div>Country</div>
+            <input name="country" placeholder="Country" />
+          </label>
+        </div>
+        <div style="margin-top: 8px;">
+          <label style="width: 100%; display: block;">
+            <div>Description</div>
+            <textarea name="description" rows="2" placeholder="Short bio"></textarea>
+          </label>
+        </div>
+        <!-- Podemos agregar date_of_birth más adelante -->
+        <div style="margin-top: 8px;">
+          <button type="submit">Create</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card" style="flex: 2;">
+      <h2>Authors</h2>
+      <form method="get" action="/authors" class="row" style="margin-bottom: 8px;">
+        <input type="text" name="q" value="{{ qv }}" placeholder="Search by name..." />
+        <button type="submit">Search</button>
+        {% if qv != "" %}<a class="muted" href="/authors">Clear</a>{% endif %}
+      </form>
+
+      {% if authors | length == 0 %}
+        <p class="muted">No authors yet.</p>
+      {% else %}
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40%">Name</th>
+            <th style="width:20%">Country</th>
+            <th style="width:30%">Description</th>
+            <th style="width:10%"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in authors %}
+          <tr>
+            <td>{{ a.name }}</td>
+            <td>{{ a.country | default(value="-") }}</td>
+            <td>{{ a.description | default(value="-") }}</td>
+            <td>
+              <form class="inline" action="/authors/edit/{{ a.id }}" method="get"><button type="submit">Edit</button></form>
+              <form class="inline" action="/authors/delete/{{ a.id }}" method="post" onsubmit="return confirm('Delete author {{ a.name }}?');" style="margin-left: 6px;">
+                <button class="danger" type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+  </div>
+{% endblock content %}
