@@ -1,0 +1,33 @@
+{# 
+  Parcial del formulario de Author.
+  Variables esperadas:
+    - action (string): URL a donde enviar el POST
+    - button_text (string): texto del botón (Create / Save)
+    - author (opcional): objeto con campos name, country, description (para editar)
+#}
+<form action="{{ action }}" method="post">
+    <div class="row">
+      <label>
+        <div>Name</div>
+        <input name="name"
+               value="{{ author.name | default(value="") }}"
+               placeholder="Name"
+               required />
+      </label>
+      <label>
+        <div>Country</div>
+        <input name="country"
+               value="{{ author.country | default(value="") }}"
+               placeholder="Country" />
+      </label>
+    </div>
+    <div style="margin-top: 8px;">
+      <label style="width: 100%; display: block;">
+        <div>Description</div>
+        <textarea name="description" rows="2" placeholder="Short bio">{{ author.description | default(value="") }}</textarea>
+      </label>
+    </div>
+    <div style="margin-top: 8px;">
+      <button type="submit">{{ button_text }}</button>
+    </div>
+</form>

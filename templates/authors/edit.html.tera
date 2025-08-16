@@ -1,0 +1,15 @@
+{% extends "base" %}
+{% block title %}Edit Author · BookReview{% endblock title %}
+
+{% block content %}
+  <div class="card" style="max-width: 720px;">
+    <h2>Edit author</h2>
+    {% set action = "/authors/update/" ~ author.id %}
+    {% set button_text = "Save" %}
+    {# "author" llega en el contexto desde el handler #}
+    {% include "authors/_form" %}
+    <div style="margin-top: 8px;">
+      <form class="inline" action="/authors" method="get"><button type="submit">Cancel</button></form>
+    </div>
+  </div>
+{% endblock content %}

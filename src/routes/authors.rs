@@ -4,6 +4,7 @@ use rocket::{Route, State};
 use rocket::form::{Form, FromForm};           // Para manejar <form> (UI)
 use rocket_dyn_templates::Template;            // Para renderizar Tera
 use rocket::response::Redirect;
+use std::collections::HashMap;
 use serde::Serialize;                          // Para serializar structs hacia la vista
 
 use futures_util::TryStreamExt;                // Para iterar cursores async de Mongo
@@ -54,6 +55,11 @@ struct AuthorsCtx {
     q: Option<String>,
     message: Option<String>,
     editing: Option<AuthorView>,
+}
+
+#[derive(Serialize)]
+struct AuthorCtx {
+    author: AuthorView,
 }
 
 // GET /authors?q=
@@ -125,42 +131,25 @@ pub async fn delete(state: &State<AppState>, id: &str) -> Template {
 }
 
 // GET /authors/edit/<id>
-// Carga el autor a editar y renderiza la misma vista de índice con un panel de edición.
+// Carga el autor a editar y renderiza la vista dedicada de edición.
 #[get("/edit/<id>")]
 pub async fn edit(state: &State<AppState>, id: &str) -> Template {
     let c = col(state);
-
-    // Listado completo (para mantener la tabla visible al editar)
-    let mut cur = c.find(doc!{}).await.expect("find authors");
-    let mut authors = Vec::<AuthorView>::new();
-    while let Some(a) = cur.try_next().await.expect("cursor") {
-        if let Some(oid) = a.id {
-            authors.push(AuthorView {
-                id: oid.to_hex(),
-                name: a.name.clone(),
-                country: a.country.clone(),
-                description: a.description.clone(),
-            });
-        }
-    }
-
-    // Autor que estamos editando
-    let editing = match ObjectId::parse_str(id) {
-        Ok(oid) => {
-            match c.find_one(doc! {"_id": oid}).await {
-                Ok(Some(a)) => a.id.map(|x| AuthorView {
-                    id: x.to_hex(),
+    if let Ok(oid) = ObjectId::parse_str(id) {
+        if let Ok(Some(a)) = c.find_one(doc! {"_id": oid}).await {
+            if let Some(oid) = a.id {
+                let view = AuthorView {
+                    id: oid.to_hex(),
                     name: a.name,
                     country: a.country,
                     description: a.description,
-                }),
-                _ => None,
+                };
+                return Template::render("authors/edit", &AuthorCtx { author: view });
             }
         }
-        Err(_) => None,
-    };
-
-    Template::render("authors/index", &AuthorsCtx { authors, q: None, message: None, editing })
+    }
+    // Si no se encuentra o hay error, volvemos al índice
+    index(state, None).await
 }
 
 // POST /authors/update/<id>
@@ -178,7 +167,37 @@ pub async fn update(state: &State<AppState>, id: &str, form: Form<AuthorForm>) -
     Redirect::to("/authors")
 }
 
+// GET /authors/create
+// Renderiza la página con el formulario de creación (usa el parcial _form).
+#[get("/create")]
+pub async fn create_page() -> Template {
+    let ctx: HashMap<&str, &str> = HashMap::new(); // Tera requiere objeto (no unit)
+    Template::render("authors/create", &ctx)
+}
+
+// GET /authors/read/<id>
+// Renderiza la vista de solo lectura con los datos del autor.
+#[get("/read/<id>")]
+pub async fn read(state: &State<AppState>, id: &str) -> Template {
+    let c = col(state);
+    if let Ok(oid) = ObjectId::parse_str(id) {
+        if let Ok(Some(a)) = c.find_one(doc! {"_id": oid}).await {
+            if let Some(oid) = a.id {
+                let view = AuthorView {
+                    id: oid.to_hex(),
+                    name: a.name,
+                    country: a.country,
+                    description: a.description,
+                };
+                return Template::render("authors/read", &AuthorCtx { author: view });
+            }
+        }
+    }
+    // Si no se encuentra o hay error, volvemos al índice
+    index(state, None).await
+}
+
 // Registro de rutas SOLO UI para montar en main.rs
 pub fn routes() -> Vec<Route> {
-    routes![index, create, delete, edit, update]
+    routes![index, create_page, create, delete, edit, update, read]
 }
