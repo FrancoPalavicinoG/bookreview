@@ -5,6 +5,7 @@
     <h2>{{ book.title }}</h2>
     <p><strong>Author:</strong> {{ book.author_name }}</p>
     <p><strong>Publication date:</strong> {{ book.publication_date | default(value="-") }}</p>
+    <p><strong>Number of sales:</strong> {{ book.total_sales | default(value=0) }}</p>
     <p><strong>Summary:</strong><br/> {{ book.summary | default(value="-") }}</p>
     <div style="margin-top:8px;">
       <a href="/books/edit/{{ book.id }}">Edit</a>
