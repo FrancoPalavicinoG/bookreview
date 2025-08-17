@@ -21,3 +21,13 @@ pub struct Book {
     pub publication_date: Option<String>,
     pub total_sales: Option<i64>, 
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Review {
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    pub id: Option<ObjectId>,
+    pub book_id: ObjectId,   // relación N:1 con Book
+    pub text: String,
+    pub score: i32,          // 1..5
+    pub up_votes: i64,       // >= 0
+}

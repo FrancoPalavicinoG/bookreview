@@ -67,4 +67,5 @@ async fn rocket() -> Rocket<Build> {
         .mount("/", routes![health])
         .mount("/authors", routes::authors::routes())
         .mount("/books", routes::books::routes())
+        .mount("/reviews", routes::reviews::routes())
 }

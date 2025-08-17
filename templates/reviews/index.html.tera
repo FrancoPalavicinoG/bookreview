@@ -1,0 +1,47 @@
+{% extends "base" %}
+{% block title %}Reviews · BookReview{% endblock title %}
+{% block content %}
+  {% set qv = q | default(value="") %}
+  <div class="card">
+    <h2>Reviews</h2>
+    <form method="get" action="/reviews" class="row" style="margin-bottom: 8px;">
+      <input type="text" name="q" value="{{ qv }}" placeholder="Search by text..." />
+      <button type="submit">Search</button>
+      {% if qv != "" %}<a class="muted" href="/reviews">Clear</a>{% endif %}
+      <a href="/reviews/create" style="margin-left:auto;">New review</a>
+    </form>
+
+    {% if reviews | length == 0 %}
+      <p class="muted">No reviews yet.</p>
+    {% else %}
+      <table>
+        <thead>
+          <tr>
+            <th style="width:25%">Book</th>
+            <th style="width:10%">Score</th>
+            <th style="width:10%">Up-votes</th>
+            <th style="width:45%">Text</th>
+            <th style="width:10%"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in reviews %}
+          <tr>
+            <td>{{ r.book_title }}</td>
+            <td>{{ r.score }}</td>
+            <td>{{ r.up_votes }}</td>
+            <td>{{ r.text }}</td>
+            <td>
+              <form class="inline" action="/reviews/read/{{ r.id }}" method="get"><button type="submit">Read</button></form>
+              <form class="inline" action="/reviews/edit/{{ r.id }}" method="get" style="margin-left:6px;"><button type="submit">Edit</button></form>
+              <form class="inline" action="/reviews/delete/{{ r.id }}" method="post" onsubmit="return confirm('Delete review?');" style="margin-left:6px;">
+                <button class="danger" type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+{% endblock content %}

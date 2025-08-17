@@ -1,0 +1,15 @@
+{% extends "base" %}
+{% block title %}Review · BookReview{% endblock title %}
+{% block content %}
+  <div class="card">
+    <h2>Review</h2>
+    <p><strong>Book:</strong> {{ review.book_title }}</p>
+    <p><strong>Score:</strong> {{ review.score }}</p>
+    <p><strong>Up-votes:</strong> {{ review.up_votes }}</p>
+    <p><strong>Text:</strong><br/> {{ review.text }}</p>
+    <div style="margin-top:8px;">
+      <a href="/reviews/edit/{{ review.id }}">Edit</a>
+      <a class="muted" href="/reviews" style="margin-left:8px;">Back</a>
+    </div>
+  </div>
+{% endblock content %}

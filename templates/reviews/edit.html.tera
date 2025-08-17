@@ -1,0 +1,13 @@
+{% extends "base" %}
+{% block title %}Edit Review · BookReview{% endblock title %}
+{% block content %}
+  <div class="card">
+    <h2>Edit review</h2>
+    {% set action = "/reviews/update/" ~ review.id %}
+    {% set button_text = "Save" %}
+    {% include "reviews/_form" %}
+    <div style="margin-top: 8px;">
+      <form class="inline" action="/reviews" method="get"><button type="submit">Cancel</button></form>
+    </div>
+  </div>
+{% endblock content %}

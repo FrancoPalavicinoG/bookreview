@@ -4,8 +4,8 @@
         <span style="opacity:.4;">·</span>
         <a href="/authors">Authors</a>
         <a href="/books">Books</a>
-        {# <a href="/reviews">Reviews</a>
-        <a href="/sales">Sales</a>
+        <a href="/reviews">Reviews</a>
+        {# <a href="/sales">Sales</a>
         <a href="/tables">Tables</a>
         <a href="/search">Search</a> #}
     </nav>
