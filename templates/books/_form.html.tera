@@ -1,0 +1,38 @@
+<form action="{{ action }}" method="post">
+  <div class="row">
+    <label>
+      <div>Title</div>
+      <input name="title" value="{{ book.title | default(value="") }}" required />
+    </label>
+
+    <label>
+      <div>Author</div>
+      <select name="author_id" required>
+        {% for a in authors %}
+          <option value="{{ a.id }}" {% if book is defined and book.author_id == a.id %}selected{% endif %}>
+            {{ a.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+
+  <div style="margin-top:8px;">
+    <label style="display:block;">
+      <div>Summary</div>
+      <textarea name="summary" rows="3">{{ book.summary | default(value="") }}</textarea>
+    </label>
+  </div>
+
+  <div class="row" style="margin-top:8px;">
+    <label>
+      <div>Publication date</div>
+      <input type="date" name="publication_date" value="{{ book.publication_date | default(value="") }}" />
+    </label>
+  </div>
+
+  <div style="margin-top:8px;">
+    <button type="submit">Save</button>
+    <a href="/books" class="muted" style="margin-left:8px;">Cancel</a>
+  </div>
+</form>

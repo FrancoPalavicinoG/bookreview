@@ -20,13 +20,7 @@
   </style>
 </head>
 <body>
-  <header>
-    <h1>BookReview</h1>
-    <nav>
-      <a href="/authors">Authors</a>
-      <!-- agrega más links luego -->
-    </nav>
-  </header>
+  {% include "_navbar" %}
 
   {% set msg = message | default(value="") %}
   {% if msg != "" %}

@@ -1,0 +1,49 @@
+{% extends "base" %}
+{% block title %}Books · BookReview{% endblock title %}
+{% block content %}
+  {% set qv = q | default(value="") %}
+  <div class="row">
+    <div class="card" style="flex: 1;">
+      <h2>Search</h2>
+      <form method="get" action="/books" class="row" style="margin-bottom: 8px;">
+        <input type="text" name="q" value="{{ qv }}" placeholder="Search by title..." />
+        <button type="submit">Search</button>
+        {% if qv != "" %}<a class="muted" href="/books">Clear</a>{% endif %}
+        <a href="/books/create" style="margin-left:auto;">New book</a>
+      </form>
+
+      {% if books | length == 0 %}
+        <p class="muted">No books yet.</p>
+      {% else %}
+        <table>
+          <thead>
+            <tr>
+              <th style="width:30%">Title</th>
+              <th style="width:25%">Author</th>
+              <th style="width:25%">Summary</th>
+              <th style="width:10%">Pub. date</th>
+              <th style="width:10%"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for b in books %}
+            <tr>
+              <td>{{ b.title }}</td>
+              <td>{{ b.author_name }}</td>
+              <td>{{ b.summary | default(value="-") }}</td>
+              <td>{{ b.publication_date | default(value="-") }}</td>
+              <td>
+                <form class="inline" action="/books/read/{{ b.id }}" method="get"><button type="submit">Read</button></form>
+                <form class="inline" action="/books/edit/{{ b.id }}" method="get" style="margin-left:6px;"><button type="submit">Edit</button></form>
+                <form class="inline" action="/books/delete/{{ b.id }}" method="post" onsubmit="return confirm('Delete book {{ b.title }}?');" style="margin-left:6px;">
+                  <button class="danger" type="submit">Delete</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+  </div>
+{% endblock content %}

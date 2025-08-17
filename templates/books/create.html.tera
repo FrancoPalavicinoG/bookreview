@@ -1,0 +1,10 @@
+{% extends "base" %}
+{% block title %}New Book · BookReview{% endblock title %}
+{% block content %}
+  <div class="card">
+    <h2>New book</h2>
+    {% set action = "/books/create" %}
+    {% set button_text = "Create" %}
+    {% include "books/_form" %}
+  </div>
+{% endblock content %}

@@ -33,7 +33,6 @@ pub struct AuthorForm {
     pub country: Option<String>,
     pub description: Option<String>,
     pub date_of_birth: Option<String>,
-    // date_of_birth: Option<String>, // Se podría agregar luego con un parse a bson::DateTime
 }
 
 // "Proyección" para la vista: evitamos exponer ObjectId y lo convertimos a String.

@@ -66,6 +66,5 @@ async fn rocket() -> Rocket<Build> {
         // Rutas mínimas por ahora (agregaremos las demás más adelante)
         .mount("/", routes![health])
         .mount("/authors", routes::authors::routes())
-        // Ejemplo de prefijos futuros:
-        // .mount("/books", routes::books::routes())
+        .mount("/books", routes::books::routes())
 }

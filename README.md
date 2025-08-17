@@ -67,7 +67,7 @@ DB_NAME=bookreview_dev
 ## 4) Correr la app
 Desde la raíz del proyecto:
 ```bash
-cargo run
+cargo run --bin bookreview         
 ```
 
 Deberías ver algo como:
