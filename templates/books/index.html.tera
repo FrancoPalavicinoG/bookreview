@@ -9,34 +9,40 @@
         <input type="text" name="q" value="{{ qv }}" placeholder="Search by title..." />
         <button type="submit">Search</button>
         {% if qv != "" %}<a class="muted" href="/books">Clear</a>{% endif %}
-        <a href="/books/create" style="margin-left:auto;">New book</a>
+        <a href="/books/create" style="margin-left:auto; text-decoration: none;">
+          <button type="button">New book</button>
+        </a>
       </form>
 
       {% if books | length == 0 %}
-        <p class="muted">No books yet.</p>
+        <p class="muted" style="text-align: center; margin: 16px 0;">No books yet.</p>
       {% else %}
-        <table>
+        <table style="width: 100%; border-collapse: collapse;">
           <thead>
-            <tr>
-              <th style="width:30%">Title</th>
-              <th style="width:25%">Author</th>
-              <th style="width:25%">Summary</th>
-              <th style="width:10%">Pub. date</th>
-              <th style="width:10%"></th>
+            <tr style="background-color: #f8f9fa;">
+              <th style="padding: 12px; text-align: left; border: 1px solid #ddd; width:30%">Title</th>
+              <th style="padding: 12px; text-align: left; border: 1px solid #ddd; width:25%">Author</th>
+              <th style="padding: 12px; text-align: left; border: 1px solid #ddd; width:25%">Summary</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd; width:10%">Pub. date</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd; width:10%">Actions</th>
             </tr>
           </thead>
           <tbody>
             {% for b in books %}
-            <tr>
-              <td>{{ b.title }}</td>
-              <td>{{ b.author_name }}</td>
-              <td>{{ b.summary | default(value="-") }}</td>
-              <td>{{ b.publication_date | default(value="-") }}</td>
-              <td>
-                <form class="inline" action="/books/read/{{ b.id }}" method="get"><button type="submit">Read</button></form>
-                <form class="inline" action="/books/edit/{{ b.id }}" method="get" style="margin-left:6px;"><button type="submit">Edit</button></form>
-                <form class="inline" action="/books/delete/{{ b.id }}" method="post" onsubmit="return confirm('Delete book {{ b.title }}?');" style="margin-left:6px;">
-                  <button class="danger" type="submit">Delete</button>
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 12px; border: 1px solid #ddd; font-weight: 600;">{{ b.title }}</td>
+              <td style="padding: 12px; border: 1px solid #ddd;">{{ b.author_name }}</td>
+              <td style="padding: 12px; border: 1px solid #ddd;">{{ b.summary | default(value="-") }}</td>
+              <td style="padding: 12px; border: 1px solid #ddd; text-align: center;">{{ b.publication_date | default(value="-") }}</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">
+                <form class="inline" action="/books/read/{{ b.id }}" method="get" style="display:inline-block;">
+                  <button type="submit" style="padding:6px 10px;">View</button>
+                </form>
+                <form class="inline" action="/books/edit/{{ b.id }}" method="get" style="display:inline-block; margin-left:6px;">
+                  <button type="submit" style="padding:6px 10px;">Edit</button>
+                </form>
+                <form class="inline" action="/books/delete/{{ b.id }}" method="post" onsubmit="return confirm('Delete book {{ b.title }}?');" style="display:inline-block; margin-left:6px;">
+                  <button class="danger" type="submit" style="padding:6px 10px;">Delete</button>
                 </form>
               </td>
             </tr>

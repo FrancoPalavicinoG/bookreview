@@ -8,8 +8,8 @@
     <p><strong>Up-votes:</strong> {{ review.up_votes }}</p>
     <p><strong>Text:</strong><br/> {{ review.text }}</p>
     <div style="margin-top:8px;">
-      <a href="/reviews/edit/{{ review.id }}">Edit</a>
-      <a class="muted" href="/reviews" style="margin-left:8px;">Back</a>
+      <form class="inline" action="/reviews/edit/{{ review.id }}" method="get"><button type="submit">Edit</button></form>
+      <form class="inline" action="/reviews" method="get" style="margin-left: 8px;"><button type="submit">Back</button></form>
     </div>
   </div>
 {% endblock content %}

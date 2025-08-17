@@ -19,33 +19,41 @@
         <input type="number" name="q_year" value="{{ q_year | default(value='') }}" min="1900" max="2100" step="1"/>
       </label>
       <button type="submit" style="align-self:flex-end;">Filter</button>
-      <a href="/sales" class="muted" style="margin-left:8px; align-self:flex-end;">Clear</a>
-      <a href="/sales/create" style="margin-left:auto; align-self:flex-end;">New sale</a>
+      <a href="/sales" style="margin-left:8px; align-self:flex-end; text-decoration: none;">
+        <button type="button">Clear</button>
+      </a>
+      <a href="/sales/create" style="margin-left:auto; align-self:flex-end; text-decoration: none;">
+        <button type="button">New sale</button>
+      </a>
     </form>
 
     {% if sales | length == 0 %}
-      <p class="muted">No sales yet.</p>
+      <p class="muted" style="text-align: center; margin: 16px 0;">No sales yet.</p>
     {% else %}
-      <table>
+      <table style="width: 100%; border-collapse: collapse;">
         <thead>
-          <tr>
-            <th style="width:40%">Book</th>
-            <th style="width:20%">Year</th>
-            <th style="width:20%">Units</th>
-            <th style="width:20%"></th>
+          <tr style="background-color: #f8f9fa;">
+            <th style="padding: 12px; text-align: left; border: 1px solid #ddd; width:40%">Book</th>
+            <th style="padding: 12px; text-align: center; border: 1px solid #ddd; width:20%">Year</th>
+            <th style="padding: 12px; text-align: center; border: 1px solid #ddd; width:20%">Units</th>
+            <th style="padding: 12px; text-align: center; border: 1px solid #ddd; width:20%">Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for s in sales %}
-          <tr>
-            <td>{{ s.book_title }}</td>
-            <td>{{ s.year }}</td>
-            <td>{{ s.units }}</td>
-            <td>
-              <form class="inline" action="/sales/read/{{ s.id }}" method="get"><button type="submit">Read</button></form>
-              <form class="inline" action="/sales/edit/{{ s.id }}" method="get" style="margin-left:6px;"><button type="submit">Edit</button></form>
-              <form class="inline" action="/sales/delete/{{ s.id }}" method="post" onsubmit="return confirm('Delete this sale?');" style="margin-left:6px;">
-                <button class="danger" type="submit">Delete</button>
+          <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 12px; border: 1px solid #ddd; font-weight: 600;">{{ s.book_title }}</td>
+            <td style="padding: 12px; border: 1px solid #ddd; text-align: center;">{{ s.year }}</td>
+            <td style="padding: 12px; border: 1px solid #ddd; text-align: center;">{{ s.units }}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">
+              <form class="inline" action="/sales/read/{{ s.id }}" method="get" style="display:inline-block;">
+                <button type="submit" style="padding:6px 10px;">View</button>
+              </form>
+              <form class="inline" action="/sales/edit/{{ s.id }}" method="get" style="display:inline-block; margin-left:6px;">
+                <button type="submit" style="padding:6px 10px;">Edit</button>
+              </form>
+              <form class="inline" action="/sales/delete/{{ s.id }}" method="post" onsubmit="return confirm('Delete this sale?');" style="display:inline-block; margin-left:6px;">
+                <button class="danger" type="submit" style="padding:6px 10px;">Delete</button>
               </form>
             </td>
           </tr>

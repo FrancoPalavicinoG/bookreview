@@ -7,8 +7,8 @@
     <p><strong>Year:</strong> {{ sale.year }}</p>
     <p><strong>Units:</strong> {{ sale.units }}</p>
     <div style="margin-top:8px;">
-      <a href="/sales/edit/{{ sale.id }}">Edit</a>
-      <a class="muted" href="/sales" style="margin-left:8px;">Back</a>
+      <form class="inline" action="/sales/edit/{{ sale.id }}" method="get"><button type="submit">Edit</button></form>
+      <form class="inline" action="/sales" method="get" style="margin-left: 8px;"><button type="submit">Back</button></form>
     </div>
   </div>
 {% endblock content %}

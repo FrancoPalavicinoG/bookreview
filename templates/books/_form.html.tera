@@ -33,6 +33,5 @@
 
   <div style="margin-top:8px;">
     <button type="submit">Save</button>
-    <a href="/books" class="muted" style="margin-left:8px;">Cancel</a>
   </div>
 </form>

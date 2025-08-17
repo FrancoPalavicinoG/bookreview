@@ -1,12 +1,12 @@
 <header>
-    <nav style="display:flex; gap:12px; align-items:center; padding:8px 12px; border-bottom:1px solid #eee; margin-bottom:12px;">
-        <a href="/" style="font-weight:600; text-decoration:none;">BookReview</a>
-        <span style="opacity:.4;">·</span>
-        <a href="/authors">Authors</a>
-        <a href="/books">Books</a>
-        <a href="/reviews">Reviews</a>
-        <a href="/sales">Sales</a>
-        {# <a href="/tables">Tables</a>
-        <a href="/search">Search</a> #}
-    </nav>
+  <div class="card" style="display:flex; align-items:center; gap:12px; padding:8px 12px;">
+    <a href="/" style="font-weight:600; text-decoration:none; font-size: 1.25rem;">BookReview</a>
+    <span class="muted" style="opacity:.5;">·</span>
+    <div class="row" style="gap:8px; margin-left:auto;">
+      <a href="/authors" style="text-decoration: none;"><button type="button">Authors</button></a>
+      <a href="/books" style="text-decoration: none;"><button type="button">Books</button></a>
+      <a href="/reviews" style="text-decoration: none;"><button type="button">Reviews</button></a>
+      <a href="/sales" style="text-decoration: none;"><button type="button">Sales</button></a>
+    </div>
+  </div>
 </header>
