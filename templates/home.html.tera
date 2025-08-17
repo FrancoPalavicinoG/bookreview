@@ -1,0 +1,450 @@
+{% extends "base" %}
+
+{% block title %}Bienvenido - BookReview{% endblock title %}
+
+{% block content %}
+<div class="card">
+  <h1>Bienvenido a BookReview 📚</h1>
+
+  <div class="row" style="margin-top: 24px;">
+    <a href="/authors" style="text-decoration: none;">
+      <button>Ver Autores</button>
+    </a>
+    <a href="/books" style="text-decoration: none;">
+      <button>Ver Libros</button>
+    </a>
+    <a href="/reviews" style="text-decoration: none;">
+      <button>Ver Reseñas</button>
+    </a>
+    <a href="/sales" style="text-decoration: none;">
+      <button>Ver Ventas</button>
+    </a>
+  </div>
+</div>
+
+<div class="card" style="margin-top: 24px;">
+  <h2>🔍 Buscar Libros</h2>
+  
+  <form action="/search" method="get" style="margin-bottom: 20px;">
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <input 
+        type="text" 
+        name="q" 
+        placeholder="Buscar en títulos y descripciones..." 
+        value="{% if search_results %}{{ search_results.query }}{% endif %}"
+        style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;"
+        required
+      >
+      <button 
+        type="submit" 
+        style="padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;"
+      >
+        Buscar
+      </button>
+      {% if show_search_results %}
+      <a 
+        href="/" 
+        style="padding: 10px 20px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 4px; font-size: 16px;"
+      >
+        Limpiar
+      </a>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if show_search_results %}
+    {% if search_results and search_results.results | length > 0 %}
+    <div style="margin-bottom: 20px;">
+      <p style="color: #666; margin: 0;">
+        Se encontraron <strong>{{ search_results.total_results }}</strong> resultado(s) para "<strong>{{ search_results.query }}</strong>"
+        (Página {{ search_results.current_page }} de {{ search_results.total_pages }})
+      </p>
+    </div>
+
+    <div style="margin-bottom: 20px;">
+      {% for book in search_results.results %}
+      <div style="border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 12px; background-color: #fff;">
+        <h3 style="margin: 0 0 8px 0; color: #007bff;">{{ book.title }}</h3>
+        <p style="margin: 0 0 8px 0; color: #666;">
+          <strong>Autor:</strong> {{ book.author_name }}
+          {% if book.publication_date %}
+          | <strong>Publicación:</strong> {{ book.publication_date | split(pat="-") | first }}
+          {% endif %}
+        </p>
+        {% if book.summary %}
+        <p style="margin: 0; color: #333; line-height: 1.5;">
+          {% if book.summary | length > 200 %}
+            {{ book.summary | truncate(length=200) }}...
+          {% else %}
+            {{ book.summary }}
+          {% endif %}
+        </p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if search_results.total_pages > 1 %}
+    <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px;">
+      {% if search_results.has_prev %}
+      <a 
+        href="/search?q={{ search_results.query }}&page={{ search_results.current_page - 1 }}" 
+        style="padding: 8px 12px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px;"
+      >
+        ← Anterior
+      </a>
+      {% endif %}
+
+      <span style="color: #666;">
+        Página {{ search_results.current_page }} de {{ search_results.total_pages }}
+      </span>
+
+      {% if search_results.has_next %}
+      <a 
+        href="/search?q={{ search_results.query }}&page={{ search_results.current_page + 1 }}" 
+        style="padding: 8px 12px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px;"
+      >
+        Siguiente →
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div style="text-align: center; padding: 40px; color: #666;">
+      <p style="margin: 0; font-size: 18px;">No se encontraron libros que coincidan con tu búsqueda.</p>
+      <p style="margin: 8px 0 0 0;">Intenta con diferentes palabras clave.</p>
+    </div>
+    {% endif %}
+  {% endif %}
+</div>
+
+<div class="card" style="margin-top: 24px;">
+  <h2>Top 10 Libros Mejor Valorados 🏆</h2>
+  
+  <table style="width: 100%; border-collapse: collapse;">
+    <thead>
+      <tr style="background-color: #f8f9fa;">
+        <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Libro</th>
+        <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Autor</th>
+        <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Puntuación</th>
+        <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Reseñas</th>
+        <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Mejor Reseña</th>
+        <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Peor Reseña</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for book in top_rated_books %}
+      <tr style="border-bottom: 1px solid #eee;">
+        <td style="padding: 12px; border: 1px solid #ddd; font-weight: bold;">{{ book.title }}</td>
+        <td style="padding: 12px; border: 1px solid #ddd;">{{ book.author_name }}</td>
+        <td style="padding: 12px; border: 1px solid #ddd; text-align: center;">
+          <span style="background-color: #28a745; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">
+            {{ book.average_score }}/5
+          </span>
+        </td>
+        <td style="padding: 12px; border: 1px solid #ddd; text-align: center;">{{ book.total_reviews }}</td>
+        <td style="padding: 12px; border: 1px solid #ddd;">
+          {% if book.highest_rated_review %}
+          <div style="background-color: #d4edda; padding: 8px; border-radius: 4px; border-left: 4px solid #28a745;">
+            <div style="margin-bottom: 4px;">
+              <span style="background-color: #28a745; color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px;">
+                {{ book.highest_rated_review.score }}/5
+              </span>
+              <span style="color: #666; font-size: 12px;">👍 {{ book.highest_rated_review.up_votes }}</span>
+            </div>
+            <div style="font-size: 14px;">
+              {% if book.highest_rated_review.text | length > 100 %}
+                {{ book.highest_rated_review.text | truncate(length=100) }}...
+              {% else %}
+                {{ book.highest_rated_review.text }}
+              {% endif %}
+            </div>
+          </div>
+          {% else %}
+          <span style="color: #999;">Sin reseñas</span>
+          {% endif %}
+        </td>
+        <td style="padding: 12px; border: 1px solid #ddd;">
+          {% if book.lowest_rated_review %}
+          <div style="background-color: #f8d7da; padding: 8px; border-radius: 4px; border-left: 4px solid #dc3545;">
+            <div style="margin-bottom: 4px;">
+              <span style="background-color: #dc3545; color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px;">
+                {{ book.lowest_rated_review.score }}/5
+              </span>
+              <span style="color: #666; font-size: 12px;">👍 {{ book.lowest_rated_review.up_votes }}</span>
+            </div>
+            <div style="font-size: 14px;">
+              {% if book.lowest_rated_review.text | length > 100 %}
+                {{ book.lowest_rated_review.text | truncate(length=100) }}...
+              {% else %}
+                {{ book.lowest_rated_review.text }}
+              {% endif %}
+            </div>
+          </div>
+          {% else %}
+          <span style="color: #999;">Sin reseñas</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if top_rated_books | length == 0 %}
+    <p style="text-align: center; margin: 24px 0; color: #666;">
+      No hay datos de libros valorados disponibles.
+    </p>
+  {% endif %}
+</div>
+
+<div class="card" style="margin-top: 24px;">
+  <h2>Top 50 Libros Más Vendidos 💰</h2>
+  
+  <table style="width: 100%; border-collapse: collapse;">
+    <thead>
+      <tr style="background-color: #f8f9fa;">
+        <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Libro</th>
+        <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Autor</th>
+        <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Año Publicación</th>
+        <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Ventas del Libro</th>
+        <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Ventas del Autor</th>
+        <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Top 5 en su Año</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for book in top_selling_books %}
+      <tr style="border-bottom: 1px solid #eee;">
+        <td style="padding: 12px; border: 1px solid #ddd; font-weight: bold;">{{ book.title }}</td>
+        <td style="padding: 12px; border: 1px solid #ddd;">{{ book.author_name }}</td>
+        <td style="padding: 12px; border: 1px solid #ddd; text-align: center;">
+          {% if book.publication_date %}
+            {{ book.publication_date | split(pat="-") | first }}
+          {% else %}
+            <span style="color: #999;">N/A</span>
+          {% endif %}
+        </td>
+        <td style="padding: 12px; border: 1px solid #ddd; text-align: center;">
+          <span style="background-color: #007bff; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">
+            {{ book.book_total_sales }}
+          </span>
+        </td>
+        <td style="padding: 12px; border: 1px solid #ddd; text-align: center;">
+          <span style="background-color: #6c757d; color: white; padding: 4px 8px; border-radius: 4px;">
+            {{ book.author_total_sales }}
+          </span>
+        </td>
+        <td style="padding: 12px; border: 1px solid #ddd; text-align: center;">
+          {% if book.was_top_5_in_publication_year %}
+            <span style="background-color: #ffc107; color: #212529; padding: 4px 8px; border-radius: 4px; font-weight: bold;">
+              🏆 SÍ
+            </span>
+          {% else %}
+            <span style="background-color: #6c757d; color: white; padding: 4px 8px; border-radius: 4px;">
+              NO
+            </span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if top_selling_books | length == 0 %}
+    <p style="text-align: center; margin: 24px 0; color: #666;">
+      No hay datos de ventas disponibles.
+    </p>
+  {% endif %}
+</div>
+
+<div class="card" style="margin-top: 24px;">
+  <h2>Resumen de Autores</h2>
+  
+  <!-- Filtros -->
+  <div class="row" style="margin-bottom: 16px;">
+    <input type="text" id="nameFilter" placeholder="Filtrar por nombre..." style="flex: 1;">
+    <input type="number" id="booksFilter" placeholder="Min. libros" style="width: 120px;">
+    <input type="number" id="scoreFilter" placeholder="Min. puntuación" step="0.1" style="width: 120px;">
+    <input type="number" id="salesFilter" placeholder="Min. ventas" style="width: 120px;">
+    <button onclick="clearFilters()">Limpiar filtros</button>
+  </div>
+
+  <table id="authorsTable">
+    <thead>
+      <tr>
+        <th>
+          <span onclick="sortTable(0)" style="cursor: pointer;">
+            Autor 
+            <span id="sort-0" class="sort-indicator">⇅</span>
+          </span>
+        </th>
+        <th>
+          <span onclick="sortTable(1)" style="cursor: pointer;">
+            Libros Publicados 
+            <span id="sort-1" class="sort-indicator">⇅</span>
+          </span>
+        </th>
+        <th>
+          <span onclick="sortTable(2)" style="cursor: pointer;">
+            Puntuación Promedio 
+            <span id="sort-2" class="sort-indicator">⇅</span>
+          </span>
+        </th>
+        <th>
+          <span onclick="sortTable(3)" style="cursor: pointer;">
+            Ventas Totales 
+            <span id="sort-3" class="sort-indicator">⇅</span>
+          </span>
+        </th>
+      </tr>
+    </thead>
+    <tbody id="authorsTableBody">
+      {% for author in authors %}
+      <tr>
+        <td>{{ author.name }}</td>
+        <td>{{ author.published_books }}</td>
+        <td>{{ author.average_score }}</td>
+        <td>{{ author.total_sales }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if authors | length == 0 %}
+    <p class="muted" style="text-align: center; margin: 24px 0;">
+      No hay datos de autores disponibles.
+    </p>
+  {% endif %}
+</div>
+
+<style>
+  .sort-indicator {
+    font-size: 14px;
+    color: #666;
+    margin-left: 4px;
+  }
+  
+  .sort-indicator.asc::after {
+    content: ' ↑';
+    color: #007acc;
+  }
+  
+  .sort-indicator.desc::after {
+    content: ' ↓';
+    color: #007acc;
+  }
+  
+  th span {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  th span:hover {
+    background-color: #f5f5f5;
+    padding: 4px;
+    border-radius: 4px;
+  }
+</style>
+
+<script>
+let sortDirection = {};
+let originalData = [];
+
+// Store original data on page load
+document.addEventListener('DOMContentLoaded', function() {
+  const tbody = document.getElementById('authorsTableBody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  originalData = rows.map(row => {
+    const cells = row.querySelectorAll('td');
+    return {
+      element: row.cloneNode(true),
+      name: cells[0].textContent.trim(),
+      books: parseInt(cells[1].textContent.trim()) || 0,
+      score: parseFloat(cells[2].textContent.trim()) || 0,
+      sales: parseInt(cells[3].textContent.replace(/,/g, '')) || 0
+    };
+  });
+});
+
+function sortTable(columnIndex) {
+  const tbody = document.getElementById('authorsTableBody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  
+  // Toggle sort direction
+  sortDirection[columnIndex] = sortDirection[columnIndex] === 'asc' ? 'desc' : 'asc';
+  
+  // Update sort indicators
+  document.querySelectorAll('.sort-indicator').forEach(indicator => {
+    indicator.className = 'sort-indicator';
+  });
+  document.getElementById(`sort-${columnIndex}`).className = `sort-indicator ${sortDirection[columnIndex]}`;
+  
+  // Sort rows
+  rows.sort((a, b) => {
+    const aValue = getCellValue(a, columnIndex);
+    const bValue = getCellValue(b, columnIndex);
+    
+    let comparison = 0;
+    if (columnIndex === 0) { // Name column (string)
+      comparison = aValue.localeCompare(bValue);
+    } else { // Numeric columns
+      comparison = aValue - bValue;
+    }
+    
+    return sortDirection[columnIndex] === 'asc' ? comparison : -comparison;
+  });
+  
+  // Reorder DOM elements
+  tbody.innerHTML = '';
+  rows.forEach(row => tbody.appendChild(row));
+}
+
+function getCellValue(row, columnIndex) {
+  const cell = row.querySelectorAll('td')[columnIndex];
+  const text = cell.textContent.trim();
+  
+  if (columnIndex === 0) return text; // Name
+  if (columnIndex === 1) return parseInt(text) || 0; // Books
+  if (columnIndex === 2) return parseFloat(text) || 0; // Score
+  if (columnIndex === 3) return parseInt(text.replace(/,/g, '')) || 0; // Sales
+  return text;
+}
+
+function filterTable() {
+  const nameFilter = document.getElementById('nameFilter').value.toLowerCase();
+  const booksFilter = parseInt(document.getElementById('booksFilter').value) || 0;
+  const scoreFilter = parseFloat(document.getElementById('scoreFilter').value) || 0;
+  const salesFilter = parseInt(document.getElementById('salesFilter').value) || 0;
+  
+  const tbody = document.getElementById('authorsTableBody');
+  tbody.innerHTML = '';
+  
+  originalData.forEach(item => {
+    const matchesName = item.name.toLowerCase().includes(nameFilter);
+    const matchesBooks = item.books >= booksFilter;
+    const matchesScore = item.score >= scoreFilter;
+    const matchesSales = item.sales >= salesFilter;
+    
+    if (matchesName && matchesBooks && matchesScore && matchesSales) {
+      tbody.appendChild(item.element.cloneNode(true));
+    }
+  });
+}
+
+function clearFilters() {
+  document.getElementById('nameFilter').value = '';
+  document.getElementById('booksFilter').value = '';
+  document.getElementById('scoreFilter').value = '';
+  document.getElementById('salesFilter').value = '';
+  filterTable();
+}
+
+// Add event listeners for real-time filtering
+document.getElementById('nameFilter').addEventListener('input', filterTable);
+document.getElementById('booksFilter').addEventListener('input', filterTable);
+document.getElementById('scoreFilter').addEventListener('input', filterTable);
+document.getElementById('salesFilter').addEventListener('input', filterTable);
+</script>
+{% endblock content %}
