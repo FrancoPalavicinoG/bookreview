@@ -14,6 +14,7 @@ use mongodb::{
 use crate::db::AppState;
 use crate::models::{Book, Review};
 
+/* ========= Helpers de colecciones ========= */
 
 fn reviews_col(state: &State<AppState>) -> Collection<Review> {
     state.db.collection::<Review>("reviews")

@@ -1,0 +1,14 @@
+{% extends "base" %}
+{% block title %}Sale · BookReview{% endblock title %}
+{% block content %}
+  <div class="card">
+    <h2>Sale</h2>
+    <p><strong>Book:</strong> {{ sale.book_title }}</p>
+    <p><strong>Year:</strong> {{ sale.year }}</p>
+    <p><strong>Units:</strong> {{ sale.units }}</p>
+    <div style="margin-top:8px;">
+      <a href="/sales/edit/{{ sale.id }}">Edit</a>
+      <a class="muted" href="/sales" style="margin-left:8px;">Back</a>
+    </div>
+  </div>
+{% endblock content %}

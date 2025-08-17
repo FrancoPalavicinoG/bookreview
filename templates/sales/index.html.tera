@@ -1,0 +1,57 @@
+{% extends "base" %}
+{% block title %}Sales · BookReview{% endblock title %}
+{% block content %}
+  <div class="card">
+    <h2>Sales</h2>
+
+    <form method="get" action="/sales" class="row" style="margin-bottom: 8px;">
+      <label>
+        <div>Book</div>
+        <select name="q_book">
+          <option value="">All</option>
+          {% for b in books %}
+            <option value="{{ b.id }}" {% if q_book is defined and q_book == b.id %}selected{% endif %}>{{ b.title }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <div>Year</div>
+        <input type="number" name="q_year" value="{{ q_year | default(value='') }}" min="1900" max="2100" step="1"/>
+      </label>
+      <button type="submit" style="align-self:flex-end;">Filter</button>
+      <a href="/sales" class="muted" style="margin-left:8px; align-self:flex-end;">Clear</a>
+      <a href="/sales/create" style="margin-left:auto; align-self:flex-end;">New sale</a>
+    </form>
+
+    {% if sales | length == 0 %}
+      <p class="muted">No sales yet.</p>
+    {% else %}
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40%">Book</th>
+            <th style="width:20%">Year</th>
+            <th style="width:20%">Units</th>
+            <th style="width:20%"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in sales %}
+          <tr>
+            <td>{{ s.book_title }}</td>
+            <td>{{ s.year }}</td>
+            <td>{{ s.units }}</td>
+            <td>
+              <form class="inline" action="/sales/read/{{ s.id }}" method="get"><button type="submit">Read</button></form>
+              <form class="inline" action="/sales/edit/{{ s.id }}" method="get" style="margin-left:6px;"><button type="submit">Edit</button></form>
+              <form class="inline" action="/sales/delete/{{ s.id }}" method="post" onsubmit="return confirm('Delete this sale?');" style="margin-left:6px;">
+                <button class="danger" type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+{% endblock content %}

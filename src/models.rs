@@ -31,3 +31,12 @@ pub struct Review {
     pub score: i32,          // 1..5
     pub up_votes: i64,       // >= 0
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Sale {
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    pub id: Option<ObjectId>,
+    pub book_id: ObjectId, // N:1 con Book
+    pub year: i32,         // e.g. 2020
+    pub units: i64,        // ventas ese año
+}
