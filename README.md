@@ -66,6 +66,12 @@ DB_NAME=bookreview_dev
 
 ## 4) Correr la app
 Desde la raíz del proyecto:
+
+- Correr el seed (solo autores por ahora)
+```bash
+cargo run --bin seeder       
+```
+  
 ```bash
 cargo run --bin bookreview         
 ```
