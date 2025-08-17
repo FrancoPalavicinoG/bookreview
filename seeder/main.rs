@@ -1,4 +1,3 @@
-use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use std::io::{self, Write};
 
@@ -16,6 +15,7 @@ use mongodb::{
 };
 use rand::{seq::SliceRandom, Rng};
 use serde::{Deserialize, Serialize};
+use tokio::task;
 
 fn logln(msg: &str) {
     println!("{msg}");
@@ -39,8 +39,8 @@ struct BookDoc {
     author_id: ObjectId,
     title: String,
     summary: Option<String>,
-    publication_date: Option<String>, // YYYY-MM-DD
-    total_sales: Option<i64>,         // será la suma de sales.units
+    publication_date: Option<String>,
+    total_sales: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -49,7 +49,7 @@ struct ReviewDoc {
     id: Option<ObjectId>,
     book_id: ObjectId,
     text: String,
-    score: i32,  // 1..5
+    score: i32,
     up_votes: i64,
 }
 
@@ -62,6 +62,25 @@ struct SaleDoc {
     units: i64,
 }
 
+// Fast bulk insert with optimal batch size
+async fn fast_bulk_insert<T>(collection: &Collection<T>, docs: Vec<T>) -> Result<()>
+where
+    T: serde::Serialize + std::marker::Unpin + std::marker::Send + std::marker::Sync + Clone,
+{
+    if docs.is_empty() {
+        return Ok(());
+    }
+
+    // Use larger batch size for maximum performance (MongoDB's default max is 16MB)
+    const BATCH_SIZE: usize = 5000;
+    
+    for chunk in docs.chunks(BATCH_SIZE) {
+        collection.insert_many(chunk.to_vec()).ordered(false).await?;
+    }
+    
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv().ok();
@@ -69,13 +88,21 @@ async fn main() -> Result<()> {
     let uri = std::env::var("MONGO_URI").expect("MONGO_URI not set");
     let db_name = std::env::var("DB_NAME").expect("DB_NAME not set");
 
-    let seed_authors: usize = std::env::var("SEED_AUTHORS").ok().and_then(|v| v.parse().ok()).unwrap_or(5);
-    let max_books_per_author: i32 = std::env::var("MAX_BOOKS_PER_AUTHOR").ok().and_then(|v| v.parse().ok()).unwrap_or(5);
-    let max_reviews_per_book: i32 = std::env::var("MAX_REVIEWS_PER_BOOK").ok().and_then(|v| v.parse().ok()).unwrap_or(6);
-    let max_years_per_book: i32 = std::env::var("MAX_YEARS_PER_BOOK").ok().and_then(|v| v.parse().ok()).unwrap_or(5);
+    // Fixed requirements
+    const AUTHORS_COUNT: usize = 50;
+    const BOOKS_COUNT: usize = 300;
+    const MIN_REVIEWS_PER_BOOK: i32 = 1;
+    const MAX_REVIEWS_PER_BOOK: i32 = 10;
+    const SALES_YEARS_PER_BOOK: i32 = 5;
 
+    let total_start = Instant::now();
+
+    // Optimized MongoDB connection for bulk operations
     let mut client_opts = ClientOptions::parse(&uri).await?;
-    client_opts.app_name = Some("bookreview-seeder".into());
+    client_opts.app_name = Some("bookreview-fast-seeder".into());
+    client_opts.max_pool_size = Some(20);
+    client_opts.min_pool_size = Some(10);
+    client_opts.max_idle_time = Some(std::time::Duration::from_secs(60));
     let client = Client::with_options(client_opts)?;
     let db = client.database(&db_name);
 
@@ -84,31 +111,36 @@ async fn main() -> Result<()> {
     let reviews_c: Collection<ReviewDoc> = db.collection("reviews");
     let sales_c: Collection<SaleDoc> = db.collection("sales");
 
-    // Countries 
-    let countries = [
-        "US","UK","CA","AR","CL","MX","BR","CO","ES","FR","DE","IT","JP","KR","CN","IN","NG","ZA","SE","NO",
-    ];
+    logln("🚀 Starting fast seeder...");
 
+    // Step 1: Clear all collections in parallel
+    logln("🧹 Clearing collections...");
+    let clear_start = Instant::now();
+    let (r1, r2, r3, r4) = tokio::join!(
+        authors_c.delete_many(doc! {}),
+        books_c.delete_many(doc! {}),
+        reviews_c.delete_many(doc! {}),
+        sales_c.delete_many(doc! {})
+    );
+    r1?; r2?; r3?; r4?;
+    logln(&format!("✅ Cleared all collections in {:?}", clear_start.elapsed()));
+
+    // Step 2: Generate all data in memory (super fast)
+    logln("📊 Generating all data...");
+    let gen_start = Instant::now();
+
+    let countries = [
+        "US", "UK", "CA", "AR", "CL", "MX", "BR", "CO", "ES", "FR", 
+        "DE", "IT", "JP", "KR", "CN", "IN", "NG", "ZA", "SE", "NO",
+    ];
     let mut rng = rand::thread_rng();
 
-
-    // AUTHORS 
-    logln("Generating authors...");
-    let t0 = Instant::now();
-
-    let mut a_uniques = HashSet::<String>::new();
-    let mut author_docs: Vec<AuthorDoc> = Vec::new();
-
-    while author_docs.len() < seed_authors {
+    // Generate authors with pre-assigned IDs
+    let mut authors: Vec<AuthorDoc> = Vec::with_capacity(AUTHORS_COUNT);
+    for _ in 0..AUTHORS_COUNT {
         let name: String = Name(EN).fake();
-        if !a_uniques.insert(name.clone()) {
-            continue; // avoid exact duplicates
-        }
-
-        // Lorem description (6..14 words)
         let description: String = Sentence(6..14).fake();
-
-        // Random date of birth (1930..=1995; day 1..=28 for simplicity)
+        
         let year = rng.gen_range(1930..=1995);
         let month = rng.gen_range(1..=12);
         let day = rng.gen_range(1..=28);
@@ -117,11 +149,10 @@ async fn main() -> Result<()> {
             .single()
             .map(|dt| dt.format("%Y-%m-%d").to_string());
 
-        // Random country
         let country = Some(countries.choose(&mut rng).unwrap().to_string());
 
-        author_docs.push(AuthorDoc {
-            id: Some(ObjectId::new()), // fijamos id para referenciar desde books
+        authors.push(AuthorDoc {
+            id: Some(ObjectId::new()),
             name,
             date_of_birth: dob,
             country,
@@ -129,121 +160,179 @@ async fn main() -> Result<()> {
         });
     }
 
-    // Wipe & seed authors
-    authors_c.delete_many(doc! {}).await?;
-    let _ = authors_c.insert_many(author_docs.clone()).await?;
-    logln(&format!("Seeded authors: {} (in {:?})", author_docs.len(), t0.elapsed()));
+    // Generate books with balanced distribution across authors
+    let mut books: Vec<BookDoc> = Vec::with_capacity(BOOKS_COUNT);
+    let books_per_author = BOOKS_COUNT / AUTHORS_COUNT;
+    let extra_books = BOOKS_COUNT % AUTHORS_COUNT;
 
-    // Mapa AuthorId -> AuthorDoc (por si se requiere)
-    let mut authors_by_id: HashMap<ObjectId, AuthorDoc> = HashMap::new();
-    for a in &author_docs {
-        if let Some(id) = a.id {
-            authors_by_id.insert(id, a.clone());
-        }
-    }
+    let mut book_index = 0;
+    for (author_idx, author) in authors.iter().enumerate() {
+        let author_id = author.id.unwrap();
+        
+        // Distribute books evenly, with some authors getting one extra book
+        let books_for_this_author = if author_idx < extra_books {
+            books_per_author + 1
+        } else {
+            books_per_author
+        };
 
-    logln("Generating books, reviews and sales...");
-    let t1 = Instant::now();
-
-    // Books
-    let mut book_docs: Vec<BookDoc> = Vec::new();
-    let mut review_docs: Vec<ReviewDoc> = Vec::new();
-    let mut sale_docs: Vec<SaleDoc> = Vec::new();
-
-    for a in &author_docs {
-        let author_id = a.id.expect("author id");
-        // 1..=max_books_per_author books per author
-        let n_books = rng.gen_range(1..=max_books_per_author);
-        for _ in 0..n_books {
+        for _ in 0..books_for_this_author {
             let book_id = ObjectId::new();
-
-            // Title 2..5 words (Sentence adds a final '.', lo quitamos)
+            
             let mut title: String = Sentence(2..5).fake();
             if title.ends_with('.') { title.pop(); }
-
-            // Summary 10..20 words
+            
             let summary: String = Sentence(10..20).fake();
-
-            // Random publication date (1990..=2024)
-            let y = rng.gen_range(1990..=2024);
-            let m = rng.gen_range(1..=12);
-            let d = rng.gen_range(1..=28);
+            
+            let pub_year = rng.gen_range(1990..=2024);
+            let pub_month = rng.gen_range(1..=12);
+            let pub_day = rng.gen_range(1..=28);
             let pub_date = Utc
-                .with_ymd_and_hms(y, m, d, 0, 0, 0)
+                .with_ymd_and_hms(pub_year, pub_month, pub_day, 0, 0, 0)
                 .single()
                 .map(|dt| dt.format("%Y-%m-%d").to_string());
 
-            // Sales: 1..=max_years_per_book years starting from pub year..pub+5 (<= 2025)
-            let pub_year = y;
-            let n_years = rng.gen_range(1..=max_years_per_book);
-            let mut years = HashSet::<i32>::new();
-            while years.len() < n_years as usize {
-                let yr = rng.gen_range(pub_year..=(pub_year + 5)).min(2025);
-                years.insert(yr);
-            }
-
-            let mut total_sales: i64 = 0;
-            for yr in years {
-                let units = rng.gen_range(50..=5000) as i64;
-                total_sales += units;
-                sale_docs.push(SaleDoc {
-                    id: Some(ObjectId::new()),
-                    book_id,
-                    year: yr,
-                    units,
-                });
-            }
-
-            // Reviews: 0..=max_reviews_per_book
-            let n_reviews = rng.gen_range(0..=max_reviews_per_book);
-            for _ in 0..n_reviews {
-                let text: String = Sentence(8..20).fake();
-                let score = rng.gen_range(1..=5) as i32;
-                let up_votes = rng.gen_range(0..=200) as i64;
-                review_docs.push(ReviewDoc {
-                    id: Some(ObjectId::new()),
-                    book_id,
-                    text,
-                    score,
-                    up_votes,
-                });
-            }
-
-            book_docs.push(BookDoc {
+            books.push(BookDoc {
                 id: Some(book_id),
                 author_id,
                 title,
                 summary: Some(summary),
                 publication_date: pub_date,
-                total_sales: Some(total_sales), // consistente con Sales recién creadas
+                total_sales: Some(0), // Will be calculated from sales
             });
+            
+            book_index += 1;
+            if book_index >= BOOKS_COUNT {
+                break;
+            }
+        }
+        
+        if book_index >= BOOKS_COUNT {
+            break;
+        }
+    }
+
+    // Generate reviews and sales for all books
+    let mut reviews: Vec<ReviewDoc> = Vec::new();
+    let mut sales: Vec<SaleDoc> = Vec::new();
+    
+    // Pre-allocate with estimated capacity
+    let avg_reviews_per_book = (MIN_REVIEWS_PER_BOOK + MAX_REVIEWS_PER_BOOK) / 2;
+    reviews.reserve(BOOKS_COUNT * avg_reviews_per_book as usize);
+    sales.reserve(BOOKS_COUNT * SALES_YEARS_PER_BOOK as usize);
+
+    for book in &books {
+        let book_id = book.id.unwrap();
+        
+        // Generate reviews (1-10 per book)
+        let num_reviews = rng.gen_range(MIN_REVIEWS_PER_BOOK..=MAX_REVIEWS_PER_BOOK);
+        for _ in 0..num_reviews {
+            let text: String = Sentence(8..20).fake();
+            let score = rng.gen_range(1..=5);
+            let up_votes = rng.gen_range(0..=200);
+            
+            reviews.push(ReviewDoc {
+                id: Some(ObjectId::new()),
+                book_id,
+                text,
+                score,
+                up_votes,
+            });
+        }
+        
+        // Generate exactly 5 years of sales per book
+        let pub_year = book.publication_date
+            .as_ref()
+            .and_then(|d| d.split('-').next())
+            .and_then(|y| y.parse::<i32>().ok())
+            .unwrap_or(2020);
+        
+        for year_offset in 0..SALES_YEARS_PER_BOOK {
+            let sale_year = pub_year + year_offset;
+            if sale_year <= 2025 { // Don't go beyond current year + 1
+                let units = rng.gen_range(50..=5000);
+                
+                sales.push(SaleDoc {
+                    id: Some(ObjectId::new()),
+                    book_id,
+                    year: sale_year,
+                    units,
+                });
+            }
+        }
+    }
+
+    // Update total_sales in books
+    let mut book_sales_map = std::collections::HashMap::new();
+    for sale in &sales {
+        *book_sales_map.entry(sale.book_id).or_insert(0i64) += sale.units;
+    }
+    
+    let mut updated_books = books;
+    for book in &mut updated_books {
+        if let Some(book_id) = book.id {
+            book.total_sales = book_sales_map.get(&book_id).copied();
         }
     }
 
     logln(&format!(
-        "Generated -> books: {} | reviews: {} | sales: {} (in {:?})",
-        book_docs.len(), review_docs.len(), sale_docs.len(), t1.elapsed()
+        "✅ Generated {} authors, {} books, {} reviews, {} sales in {:?}",
+        authors.len(), updated_books.len(), reviews.len(), sales.len(), gen_start.elapsed()
     ));
 
-    logln("Clearing collections (reviews, sales, books)...");
-    reviews_c.delete_many(doc! {}).await?;
-    logln("Cleared reviews");
-    sales_c.delete_many(doc! {}).await?;
-    logln("Cleared sales");
-    books_c.delete_many(doc! {}).await?;
-    logln("Cleared books");
+    // Step 3: Insert all data in parallel using separate tasks
+    logln("💾 Inserting all data in parallel...");
+    let insert_start = Instant::now();
 
-    logln("Inserting books...");
-    let _ = books_c.insert_many(book_docs.clone()).await?;
-    logln("Inserted books");
-    logln("Inserting reviews...");
-    let _ = reviews_c.insert_many(review_docs.clone()).await?;
-    logln("Inserted reviews");
-    logln("Inserting sales...");
-    let _ = sales_c.insert_many(sale_docs.clone()).await?;
-    logln("Inserted sales");
+    let (authors_result, books_result, reviews_result, sales_result) = tokio::join!(
+        task::spawn({
+            let authors_c = authors_c.clone();
+            let authors = authors.clone();
+            async move {
+                logln("📝 Inserting authors...");
+                fast_bulk_insert(&authors_c, authors).await
+            }
+        }),
+        task::spawn({
+            let books_c = books_c.clone();
+            let books = updated_books.clone();
+            async move {
+                logln("📚 Inserting books...");
+                fast_bulk_insert(&books_c, books).await
+            }
+        }),
+        task::spawn({
+            let reviews_c = reviews_c.clone();
+            let reviews = reviews.clone();
+            async move {
+                logln("⭐ Inserting reviews...");
+                fast_bulk_insert(&reviews_c, reviews).await
+            }
+        }),
+        task::spawn({
+            let sales_c = sales_c.clone();
+            let sales = sales.clone();
+            async move {
+                logln("💰 Inserting sales...");
+                fast_bulk_insert(&sales_c, sales).await
+            }
+        })
+    );
 
-    logln("Seeding completed.");
+    // Handle results
+    authors_result??;
+    books_result??;
+    reviews_result??;
+    sales_result??;
+
+    logln(&format!("✅ All data inserted in {:?}", insert_start.elapsed()));
+    logln(&format!("🎉 Seeding completed in {:?}", total_start.elapsed()));
+    
+    logln("\n📊 Final Statistics:");
+    logln(&format!("  • Authors: {}", AUTHORS_COUNT));
+    logln(&format!("  • Books: {}", updated_books.len()));
+    logln(&format!("  • Reviews: {} (avg {:.1} per book)", reviews.len(), reviews.len() as f64 / updated_books.len() as f64));
+    logln(&format!("  • Sales: {} ({} years per book)", sales.len(), SALES_YEARS_PER_BOOK));
 
     Ok(())
 }
