@@ -14,7 +14,7 @@ use mongodb::{
 };
 
 use crate::db::AppState;                       // Estado global (contiene Database)
-use crate::models::Author;                     // Modelo de dominio (serde + bson)
+//use crate::models::Author;                     // Modelo de dominio (serde + bson)
 
 // Helper: obtener un handle tipado a la colección "authors".
 // - No hace I/O aún; solo devuelve un objeto para luego invocar find/insert/update...
@@ -22,6 +22,8 @@ use crate::models::Author;                     // Modelo de dominio (serde + bso
 fn col(state: &State<AppState>) -> Collection<Author> {
     state.db.collection::<Author>("authors")
 }
+
+use crate::models::{Author, Book, Review, Sale};   // importar todos los modelos
 
 /* ====== UI ===== */
 
@@ -124,13 +126,36 @@ pub async fn create(state: &State<AppState>, form: Form<AuthorForm>) -> Template
 // - Si el id no es válido o no existe, simplemente recargamos.
 // - Igual que arriba, podríamos usar Redirect::to("/authors/ui").
 #[post("/delete/<id>")]
-pub async fn delete(state: &State<AppState>, id: &str) -> Template {
-    let c = col(state);
-    if let Ok(oid) = ObjectId::parse_str(id) {
-        let _ = c.delete_one(doc! {"_id": oid}).await;
+pub async fn delete_author(state: &State<AppState>, id: &str) -> Template {
+    let db = &state.db;
+
+    if let Ok(author_id) = ObjectId::parse_str(id) {
+        let authors = db.collection::<Author>("authors");
+        let books = db.collection::<Book>("books");
+        let reviews = db.collection::<Review>("reviews");
+        let sales = db.collection::<Sale>("sales");
+
+        // buscar libros del autor
+        if let Ok(mut cursor) = books.find(doc! { "author_id": &author_id }).await {
+            while let Some(book) = cursor.try_next().await.unwrap_or(None) {
+                if let Some(book_id) = book.id {
+                    // borrar reseñas y ventas de cada libro
+                    let _ = reviews.delete_many(doc! { "book_id": &book_id }).await;
+                    let _ = sales.delete_many(doc! { "book_id": &book_id }).await;
+                }
+            }
+        }
+
+        // borrar libros del autor
+        let _ = books.delete_many(doc! { "author_id": &author_id }).await;
+
+        // borrar autor
+        let _ = authors.delete_one(doc! { "_id": &author_id }).await;
     }
+
     index(state, None).await
 }
+
 
 // GET /authors/edit/<id>
 // Carga el autor a editar y renderiza la vista dedicada de edición.
@@ -206,5 +231,5 @@ pub async fn read(state: &State<AppState>, id: &str) -> Template {
 
 // Registro de rutas SOLO UI para montar en main.rs
 pub fn routes() -> Vec<Route> {
-    routes![index, create_page, create, delete, edit, update, read]
+    routes![index, create_page, create, delete_author, edit, update, read]
 }

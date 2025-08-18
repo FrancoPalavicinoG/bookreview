@@ -16,10 +16,10 @@ use crate::models::{Book, Review};
 
 /* ========= Helpers de colecciones ========= */
 
-fn reviews_col(state: &State<AppState>) -> Collection<Review> {
+pub fn reviews_col(state: &State<AppState>) -> Collection<Review> {
     state.db.collection::<Review>("reviews")
 }
-fn books_col(state: &State<AppState>) -> Collection<Book> {
+pub fn books_col(state: &State<AppState>) -> Collection<Book> {
     state.db.collection::<Book>("books")
 }
 

@@ -6,6 +6,10 @@ use serde::Serialize;
 use futures_util::TryStreamExt;
 use std::collections::HashMap;
 
+use crate::models::{Review, Sale};   // importar todos los modelos
+use crate::routes::reviews::reviews_col;          // helper público para obtener reviews
+use crate::routes::sales::sales_col;              // helper público para obtener sales
+
 use mongodb::{
     bson::{doc, oid::ObjectId},
     Collection,
@@ -14,10 +18,10 @@ use mongodb::{
 use crate::db::AppState;
 use crate::models::{Author, Book};
 
-fn books_col(state: &State<AppState>) -> Collection<Book> {
+pub fn books_col(state: &State<AppState>) -> Collection<Book> {
     state.db.collection::<Book>("books")
 }
-fn authors_col(state: &State<AppState>) -> Collection<Author> {
+pub fn authors_col(state: &State<AppState>) -> Collection<Author> {
     state.db.collection::<Author>("authors")
 }
 
@@ -231,12 +235,24 @@ pub async fn update(state: &State<AppState>, id: &str, form: Form<BookForm>) -> 
 }
 
 // POST /books/delete/<id>
+// #[post("/delete/<id>")]
 #[post("/delete/<id>")]
 pub async fn delete(state: &State<AppState>, id: &str) -> Redirect {
     let books_c = books_col(state);
-    if let Ok(oid) = ObjectId::parse_str(id) {
-        let _ = books_c.delete_one(doc!{"_id": oid}).await;
+    let reviews_c = reviews_col(state);
+    let sales_c = sales_col(state);
+
+    if let Ok(book_id) = ObjectId::parse_str(id) {
+        // eliminar reseñas asociadas
+        let _ = reviews_c.delete_many(doc! {"book_id": &book_id}).await;
+
+        // eliminar ventas asociadas
+        let _ = sales_c.delete_many(doc! {"book_id": &book_id}).await;
+
+        // eliminar el libro
+        let _ = books_c.delete_one(doc! {"_id": &book_id}).await;
     }
+
     Redirect::to("/books")
 }
 
