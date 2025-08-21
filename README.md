@@ -38,16 +38,6 @@ cargo --version
    ```
    Abre Docker Desktop al menos una vez.
 
-2. Desde la carpeta del repo:
-   ```bash
-   docker compose up -d
-   docker compose ps
-   # (opcional) ver logs de Mongo
-   docker compose logs -f
-   ```
-
-Esto inicia Mongo en **localhost:27017** y persiste datos en un volumen.
-
 ---
 
 ## 3) Variables de entorno (`.env`)
@@ -64,32 +54,47 @@ DB_NAME=bookreview_dev
 
 ---
 
-## 4) Correr la app
+## 4) Correr la app con Docker
+
+### 4.1. Levantar la app y Mongo DB
 Desde la raíz del proyecto:
 
-- Correr el seed (solo autores por ahora)
-  ```bash
-  cargo run --bin seeder       
-  ```
-- Luego la app
-  
 ```bash
-cargo run --bin bookreview         
+docker compose up -d --build
+docker compose logs -f web   # ver salida de Rocket
 ```
 
 Deberías ver algo como:
 ```
-Rocket has launched from http://127.0.0.1:8000
+Rocket has launched from http://0.0.0.0:8000
 ```
 
-Abre la vista en el navegador:
-```
-http://127.0.0.1:8000/authors
-```
-
-
-- Si el puerto 8000 está ocupado:
+Comprueba salud:
 ```bash
-ROCKET_PORT=8001 cargo run
-# Abre http://127.0.0.1:8001/authors
+curl http://127.0.0.1:8000/health
+# ok
+```
+
+Abre la web:
+```
+http://127.0.0.1:8000/
+```
+
+---
+
+### 4.2. Seeder
+El seeder **no** corre automáticamente. Ejecútalo manualmente:
+
+```bash
+docker compose run --rm web sh -lc '/app/seeder'
+```
+---
+
+### 4.3. Apagar / Reset DB
+```bash
+# Apagar (mantiene datos en el volumen)
+docker compose down
+
+# Apagar y borrar volumen de Mongo (reinicia la base desde cero)
+docker compose down -v
 ```

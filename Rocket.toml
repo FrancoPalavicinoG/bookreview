@@ -1,0 +1,14 @@
+# Rocket configuration for BookReview
+
+[default]
+address = "0.0.0.0"
+port = 8000
+log_level = "normal"
+# rocket_dyn_templates looks for this key to find your templates
+template_dir = "templates"
+
+[debug]
+cli_colors = true
+
+[release]
+log_level = "normal"
