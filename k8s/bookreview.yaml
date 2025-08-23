@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bookreview
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo
+  namespace: bookreview
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: mongo }
+  template:
+    metadata:
+      labels: { app: mongo }
+    spec:
+      containers:
+        - name: mongo
+          image: mongo:7
+          args: ["--wiredTigerCacheSizeGB", "1", "--bind_ip", "0.0.0.0"]
+          ports:
+            - name: mongo
+              containerPort: 27017
+          livenessProbe:
+            tcpSocket: { port: 27017 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket: { port: 27017 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  namespace: bookreview
+spec:
+  type: ClusterIP
+  selector: { app: mongo }
+  ports:
+    - name: mongo
+      port: 27017
+      targetPort: 27017
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bookreview-web
+  namespace: bookreview
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: bookreview-web }
+  template:
+    metadata:
+      labels: { app: bookreview-web }
+    spec:
+      containers:
+        - name: web
+          image: bookreview-web:kind
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: MONGO_URI, value: "mongodb://mongo:27017" }
+            - { name: DB_NAME,   value: "bookreview_dev" }
+            - { name: ROCKET_ADDRESS, value: "0.0.0.0" }
+            - { name: ROCKET_PORT,    value: "8000" }
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bookreview-web
+  namespace: bookreview
+spec:
+  type: ClusterIP
+  selector: { app: bookreview-web }
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
