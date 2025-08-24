@@ -145,7 +145,7 @@ kubectl -n bookreview port-forward svc/bookreview-web 8000:8000
 
 **Seeder** (carga de datos de ejemplo) en el cluster:
 ```bash
-kubectl -n bookreview run seeder --image=bookreview-web:kind --restart=Never --rm -it -- /app/seeder
+kubectl -n bookreview run seeder --image=bookreview-web:kind --restart=Never --rm -it --env="MONGO_URI=mongodb://mongo:27017" --env="DB_NAME=bookreview_dev" -- /app/seeder
 ```
 
 ---
