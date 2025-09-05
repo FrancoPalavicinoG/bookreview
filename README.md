@@ -178,3 +178,11 @@ kubectl delete -f k8s/bookreview.yaml
 ```bash
 kind delete cluster --name bookreview
 ```
+
+### 6) Docker + cache
+Desde la raíz del proyecto:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.cache.yml up -d --build
+docker compose logs -f web
+```
