@@ -34,8 +34,8 @@ struct SearchForm {
 
 // ------- Rutas base -------
 #[get("/")]
-async fn home(state: &State<db::AppState>) -> Template {   // <-- corregido el tipo
-    let authors_summary = match state.get_authors_summary().await {
+async fn home(state: &State<db::AppState>) -> Template {   
+    let authors_summary = match state.get_authors_summary_cached().await {
         Ok(summaries) => summaries,
         Err(e) => {
             eprintln!("Error getting authors summary: {}", e);

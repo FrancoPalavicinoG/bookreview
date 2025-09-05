@@ -1,27 +1,26 @@
-use std::sync::Arc;
 use std::time::Duration;
-use async_trait::async_trait;
-use redis::{AsyncCommands, aio::ConnectionManager};
+use redis::{AsyncCommands, aio::Connection};
+use tokio::sync::Mutex;
 
 use super::Cache;
 
 pub struct RedisCache {
-    manager: Arc<ConnectionManager>,
+    conn: Mutex<Connection>,
 }
 
 impl RedisCache {
     pub async fn new(url: &str) -> anyhow::Result<Self> {
         let client = redis::Client::open(url)?;
-        // requiere el feature "connection-manager" en redis = 0.25
-        let manager = client.get_connection_manager().await?;
-        Ok(Self { manager: Arc::new(manager) })
+        // En redis 0.25 usamos una conexión Tokio simple
+        let conn = client.get_tokio_connection().await?;
+        Ok(Self { conn: Mutex::new(conn) })
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl Cache for RedisCache {
     async fn get(&self, key: &str) -> Option<Vec<u8>> {
-        let mut conn = (*self.manager).clone();
+        let mut conn = self.conn.lock().await;
         match conn.get::<_, Vec<u8>>(key).await {
             Ok(v) => Some(v),
             Err(_) => None,
@@ -29,20 +28,21 @@ impl Cache for RedisCache {
     }
 
     async fn set(&self, key: &str, value: &[u8], ttl: Option<Duration>) {
-        let mut conn = (*self.manager).clone();
+        let mut conn = self.conn.lock().await;
         let _: redis::RedisResult<()> = match ttl {
-            Some(d) => conn.set_ex(key, value, d.as_secs()).await, // u64 OK
+            Some(d) => conn.set_ex(key, value, d.as_secs()).await,
             None => conn.set(key, value).await,
         };
     }
 
     async fn del(&self, key: &str) {
-        let mut conn = (*self.manager).clone();
+        let mut conn = self.conn.lock().await;
         let _: redis::RedisResult<()> = conn.del(key).await;
     }
 
     async fn del_prefix(&self, prefix: &str) {
-        let mut conn = (*self.manager).clone();
+        // Sencillo (no óptimo): KEYS prefix* y DEL
+        let mut conn = self.conn.lock().await;
         let pattern = format!("{}*", prefix);
         let keys_res: redis::RedisResult<Vec<String>> = conn.keys(&pattern).await;
         if let Ok(keys) = keys_res {

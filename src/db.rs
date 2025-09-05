@@ -2,6 +2,7 @@ use crate::config::AppConfig;
 use std::sync::Arc;
 use std::time::Duration;
 use futures_util::stream::TryStreamExt;
+use serde::{Serialize, de::DeserializeOwned};
 
 use mongodb::{
     bson::{doc, oid::ObjectId},
@@ -132,6 +133,38 @@ pub async fn init_db() -> AppState {
 }
 
 impl AppState {
+    // Claves / prefijos
+    pub const AUTHORS_SUMMARY_CACHE_KEY: &'static str = "authors:summary";
+    fn key_author(author_id: &str) -> String { format!("author:{author_id}") }
+    fn key_book_avg(book_id: &str) -> String { format!("book:{book_id}:avg_score") }
+    fn key_search(q: &str, page: i64, per_page: i64) -> String {
+        let norm = q.trim().to_lowercase().replace(char::is_whitespace, "+");
+        format!("search:books:q:{norm}:p:{page}:pp:{per_page}")
+    }
+
+    // TTLs (ajústalos a gusto)
+    const TTL_AUTHORS_SUMMARY: std::time::Duration = std::time::Duration::from_secs(300);
+    const TTL_AUTHOR: std::time::Duration = std::time::Duration::from_secs(600);
+    const TTL_BOOK_AVG: std::time::Duration = std::time::Duration::from_secs(120);
+    const TTL_SEARCH: std::time::Duration = std::time::Duration::from_secs(300);
+
+    // --- Helpers JSON <-> bytes ---
+    async fn cache_get_json<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
+        if let Some(bytes) = self.cache.get(key).await {
+            serde_json::from_slice(&bytes).ok()
+        } else {
+            None
+        }
+    }
+    async fn cache_set_json<T: Serialize>(&self, key: &str, value: &T, ttl: Option<std::time::Duration>) {
+        if let Ok(bytes) = serde_json::to_vec(value) {
+            self.cache.set(key, &bytes, ttl).await;
+        }
+    }
+    async fn cache_del_key(&self, key: &str) { self.cache.del(key).await; }
+    async fn cache_del_pref(&self, prefix: &str) { self.cache.del_prefix(prefix).await; }
+
+    //get_authors_summary sin cache
     pub async fn get_authors_summary(&self) -> mongodb::error::Result<Vec<AuthorSummary>> {
         let pipeline = vec![
             // Lookup books for each author
@@ -250,6 +283,22 @@ impl AppState {
         }
         
         Ok(summaries)
+    }
+
+    //get_authors_summary + cache
+    pub async fn get_authors_summary_cached(&self) -> mongodb::error::Result<Vec<AuthorSummary>> {
+        if let Some(cached) = self.cache_get_json::<Vec<AuthorSummary>>(Self::AUTHORS_SUMMARY_CACHE_KEY).await {
+            eprintln!("[cache] HIT {}", Self::AUTHORS_SUMMARY_CACHE_KEY);
+            return Ok(cached);
+        }
+        eprintln!("[cache] MISS {} -> Mongo", Self::AUTHORS_SUMMARY_CACHE_KEY);
+        let data = self.get_authors_summary().await?;
+        self.cache_set_json(
+            Self::AUTHORS_SUMMARY_CACHE_KEY,
+            &data,
+            Some(Self::TTL_AUTHORS_SUMMARY)
+        ).await;
+        Ok(data)
     }
 
     pub async fn get_top_rated_books(&self) -> mongodb::error::Result<Vec<TopRatedBook>> {
