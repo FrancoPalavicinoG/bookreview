@@ -1,5 +1,7 @@
 # ------- Build stage -------
 FROM rust:1.83-slim AS builder
+ARG CARGO_FEATURES=""
+ENV CARGO_FEATURES=${CARGO_FEATURES}
 WORKDIR /app
 
 # System deps required to compile (openssl, ring, etc.)
@@ -9,7 +11,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy ALL sources and build directly to avoid stale cached dummy binaries
 COPY . .
-RUN cargo build --release --bin bookreview --bin seeder
+RUN if [ -z "$CARGO_FEATURES" ]; then \
+    echo "[build] Building WITHOUT extra features"; \
+    cargo build --release --bin bookreview --bin seeder; \
+  else \
+    echo "[build] Building WITH features: $CARGO_FEATURES"; \
+    cargo build --release --no-default-features --features "$CARGO_FEATURES" --bin bookreview --bin seeder; \
+  fi
 
 # ------- Runtime stage -------
 FROM debian:bookworm-slim

@@ -3,14 +3,17 @@
 
 use rocket::{Rocket, Build, State};
 use rocket::http::Method;
+use rocket::fs::FileServer;              // <-- NUEVO: para servir estáticos
 use rocket_dyn_templates::Template;
 use rocket_cors::{CorsOptions, AllowedOrigins, AllowedHeaders};
 use serde_json::json;
 use rocket::form::{Form, FromForm};
 use rocket::response::Redirect;
 
-// Declaramos módulos (archivos) aunque estén vacíos por ahora.
-// No los usamos todavía para evitar errores de compilación.
+// Declaramos módulos
+mod config;                              // <-- NUEVO
+mod cache;                               // <-- NUEVO
+mod search;                              // <-- NUEVO
 mod db;
 mod models;
 mod routes {
@@ -31,7 +34,7 @@ struct SearchForm {
 
 // ------- Rutas base -------
 #[get("/")]
-async fn home(state: &State<db::AppState>) -> Template {
+async fn home(state: &State<db::AppState>) -> Template {   // <-- corregido el tipo
     let authors_summary = match state.get_authors_summary().await {
         Ok(summaries) => summaries,
         Err(e) => {
@@ -68,7 +71,7 @@ async fn home(state: &State<db::AppState>) -> Template {
 }
 
 #[get("/search?<q>&<page>")]
-async fn search(q: String, page: Option<i64>, state: &State<db::AppState>) -> Template {
+async fn search_route(q: String, page: Option<i64>, state: &State<db::AppState>) -> Template {
     let page = page.unwrap_or(1);
     let per_page = 10;
 
@@ -121,7 +124,6 @@ fn health() -> &'static str {
 }
 
 // CORS abierto para desarrollo.
-// Ajusta AllowedOrigins si quieres restringirlo.
 fn cors() -> rocket_cors::Cors {
     let allowed_origins = AllowedOrigins::all();
 
@@ -149,19 +151,29 @@ fn cors() -> rocket_cors::Cors {
 
 #[launch]
 async fn rocket() -> Rocket<Build> {
-    // Requiere que implementemos db::init_db() en el siguiente paso.
+    // 1) Leemos config para decidir si montamos estáticos
+    let cfg = crate::config::AppConfig::from_env();
+
+    // 2) Creamos el estado (db::init_db() ya usa AppConfig por dentro
+    //    y devuelve AppState con NoopCache/NoopSearch si no hay URLs configuradas)
     let state = db::init_db().await;
 
-    rocket::build()
+    // 3) Construimos Rocket y montamos rutas
+    let mut app = rocket::build()
         .manage(state)
-        // Templates Tera (los usaremos cuando hagamos las vistas)
         .attach(Template::fairing())
-        // CORS dev
         .attach(cors())
-        // Rutas mínimas por ahora (agregaremos las demás más adelante)
-        .mount("/", routes![home, search, health])
+        .mount("/", routes![home, search_route, health])
         .mount("/authors", routes::authors::routes())
         .mount("/books", routes::books::routes())
         .mount("/reviews", routes::reviews::routes())
-        .mount("/sales", routes::sales::routes())
+        .mount("/sales", routes::sales::routes());
+
+    // 4) Si elegiste servir estáticos desde la app (SERVE_STATIC=app),
+    //    montamos /static -> {STATIC_DIR}
+    if cfg.serve_static_from_app {
+        app = app.mount("/static", FileServer::from(&cfg.static_dir));
+    }
+
+    app
 }

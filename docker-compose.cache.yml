@@ -1,0 +1,17 @@
+services:
+  web:
+    build:
+      args:
+        CARGO_FEATURES: "redis-cache"
+    environment:
+      SERVE_STATIC: "proxy"
+      CACHE_URL: "redis://redis:6379"
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: bookreview_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped

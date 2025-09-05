@@ -1,5 +1,6 @@
-use dotenvy::dotenv;
-use std::env;
+use crate::config::AppConfig;
+use std::sync::Arc;
+use std::time::Duration;
 use futures_util::stream::TryStreamExt;
 
 use mongodb::{
@@ -9,8 +10,25 @@ use mongodb::{
 };
 use crate::models::{AuthorSummary, TopRatedBook, ReviewWithScore, TopSellingBook, SearchResult, PaginatedSearchResults};
 
+use crate::cache::{Cache, NoopCache};
+#[cfg(feature = "redis-cache")]
+use crate::cache::redis::RedisCache;
+use crate::search::{SearchEngine, NoopSearch};
+
+
+fn build_search(cfg: &AppConfig) -> Arc<dyn SearchEngine> {
+    if let Some(url) = &cfg.search_url {
+        if !url.is_empty() {
+            eprintln!("SEARCH_URL set ({}). Using NoopSearch for now.", url);
+        }
+    }
+    Arc::new(NoopSearch)
+}
+
 pub struct AppState {
     pub db: Database,
+    pub cache: Arc<dyn Cache>,
+    pub search: Arc<dyn SearchEngine>,
 }
 
 pub async fn ensure_indexes(db: &Database) -> mongodb::error::Result<()> {
@@ -75,21 +93,42 @@ pub async fn ensure_indexes(db: &Database) -> mongodb::error::Result<()> {
 }
 
 pub async fn init_db() -> AppState {
-    dotenv().ok();
-    let uri = env::var("MONGO_URI").expect("MONGO_URI not set in .env");
-    let dbname = env::var("DB_NAME").unwrap_or_else(|_| "bookreview".into());
+    let cfg = AppConfig::from_env();
 
-    let mut opts = ClientOptions::parse(&uri).await.expect("Invalid MONGO_URI");
+    let mut opts = ClientOptions::parse(&cfg.mongo_uri).await.expect("Invalid MONGO_URI");
     opts.app_name = Some("bookreview".into());
 
     let client = Client::with_options(opts).expect("Cannot create Mongo client");
-    let db = client.database(&dbname);
+    let db = client.database(&cfg.db_name);
+
+    // Build cache adapter (Redis if feature enabled and CACHE_URL present; otherwise Noop)
+    #[cfg(feature = "redis-cache")]
+    let cache: Arc<dyn Cache> = if let Some(url) = cfg.cache_url.clone() {
+        match RedisCache::new(&url).await {
+            Ok(c) => {
+                println!("[cache] Using Redis at {}", url);
+                Arc::new(c)
+            }
+            Err(e) => {
+                eprintln!("[cache] Redis init failed: {e}. Falling back to Noop.");
+                Arc::new(NoopCache)
+            }
+        }
+    } else {
+        Arc::new(NoopCache)
+    };
+
+    #[cfg(not(feature = "redis-cache"))]
+    let cache: Arc<dyn Cache> = Arc::new(NoopCache);
+
+    // Build search adapter (Noop for now; will switch to ES/OpenSearch behind a feature)
+    let search = build_search(&cfg);
 
     if let Err(e) = ensure_indexes(&db).await {
         eprintln!("Failed to create indexes: {e}");
     }
 
-    AppState { db }
+    AppState { db, cache, search }
 }
 
 impl AppState {
