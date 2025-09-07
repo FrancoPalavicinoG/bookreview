@@ -193,9 +193,14 @@ async fn rocket() -> Rocket<Build> {
         .mount("/sales", routes::sales::routes());
 
     // 4) Si elegiste servir estáticos desde la app (SERVE_STATIC=app),
-    //    montamos /static -> {STATIC_DIR}
+    //    montamos /static -> {STATIC_DIR} solo si existe para evitar panic
     if cfg.serve_static_from_app {
-        app = app.mount("/static", FileServer::from(&cfg.static_dir));
+        let p = std::path::Path::new(&cfg.static_dir);
+        if p.is_dir() {
+            app = app.mount("/static", FileServer::from(p));
+        } else {
+            eprintln!("[static] Directory '{}' not found; static server disabled", cfg.static_dir);
+        }
     }
 
     app
