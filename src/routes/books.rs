@@ -164,6 +164,9 @@ pub async fn create(state: &State<AppState>, form: Form<BookForm>) -> Redirect {
         total_sales: None,
     };
     let _ = books_c.insert_one(&b).await;
+    // invalidate caches: authors summary and search results
+    state.cache_del_key(AppState::AUTHORS_SUMMARY_CACHE_KEY).await;
+    state.cache_del_pref("search:books:").await;
     Redirect::to("/books")
 }
 
@@ -231,6 +234,9 @@ pub async fn update(state: &State<AppState>, id: &str, form: Form<BookForm>) -> 
     if let Some(p) = f.publication_date { set_doc.insert("publication_date", p); }
 
     let _ = books_c.find_one_and_update(doc!{"_id": oid}, doc!{"$set": set_doc}).await;
+    // invalidate caches: authors summary and search results
+    state.cache_del_key(AppState::AUTHORS_SUMMARY_CACHE_KEY).await;
+    state.cache_del_pref("search:books:").await;
     Redirect::to("/books")
 }
 
@@ -251,6 +257,11 @@ pub async fn delete(state: &State<AppState>, id: &str) -> Redirect {
 
         // eliminar el libro
         let _ = books_c.delete_one(doc! {"_id": &book_id}).await;
+
+        // invalidate caches related to this book
+        state.cache_del_key(&AppState::key_book_avg(&book_id.to_hex())).await;
+        state.cache_del_key(AppState::AUTHORS_SUMMARY_CACHE_KEY).await;
+        state.cache_del_pref("search:books:").await;
     }
 
     Redirect::to("/books")

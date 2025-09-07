@@ -93,6 +93,10 @@ async fn recompute_book_total(state: &State<AppState>, book_oid: &ObjectId) {
             doc! { "$set": { "total_sales": total } },
         )
         .await;
+
+    // invalidate caches: author summaries (they aggregate sales) and search results
+    state.cache_del_key(AppState::AUTHORS_SUMMARY_CACHE_KEY).await;
+    state.cache_del_pref("search:books:").await;
 }
 
 
@@ -245,7 +249,7 @@ pub async fn update(state: &State<AppState>, id: &str, form: Form<SaleForm>) -> 
     let f = form.into_inner();
 
     let oid = match ObjectId::parse_str(id) { Ok(x)=>x, Err(_)=> return Redirect::to("/sales") };
-    let new_book = match ObjectId::parse_str(&f.book_id) { Ok(x)=>x, Err(_)=> return Redirect::to("/sales") };
+    let new_book = match ObjectId::parse_str(&f.book_id) { Ok(x)=>x, Err(_)=>return Redirect::to("/sales") };
 
     // validar libro
     let exists = b_c.find_one(doc!{"_id": &new_book}).await.ok().flatten().is_some();
