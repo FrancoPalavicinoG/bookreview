@@ -116,6 +116,9 @@ pub async fn create(state: &State<AppState>, form: Form<AuthorForm>) -> Template
     };
 
     let _ = c.insert_one(&a).await;
+    // Invalidate caches affected by author creation
+    state.cache_del_key(AppState::AUTHORS_SUMMARY_CACHE_KEY).await;
+    state.cache_del_pref("search:books:").await;
     // Re-render directo del índice (simple y efectivo)
     index(state, None).await
 }
@@ -142,6 +145,10 @@ pub async fn delete_author(state: &State<AppState>, id: &str) -> Template {
                     // borrar reseñas y ventas de cada libro
                     let _ = reviews.delete_many(doc! { "book_id": &book_id }).await;
                     let _ = sales.delete_many(doc! { "book_id": &book_id }).await;
+
+                    // Invalidate per-book cached average score
+                    let avg_key = format!("book:{}:avg_score", book_id.to_hex());
+                    state.cache_del_key(&avg_key).await;
                 }
             }
         }
@@ -151,6 +158,10 @@ pub async fn delete_author(state: &State<AppState>, id: &str) -> Template {
 
         // borrar autor
         let _ = authors.delete_one(doc! { "_id": &author_id }).await;
+
+        // Invalidate caches affected by author deletion
+        state.cache_del_key(AppState::AUTHORS_SUMMARY_CACHE_KEY).await;
+        state.cache_del_pref("search:books:").await;
     }
 
     index(state, None).await
@@ -194,6 +205,9 @@ pub async fn update(state: &State<AppState>, id: &str, form: Form<AuthorForm>) -
             set_doc.insert("date_of_birth", dob_str);
         }
         let _ = c.find_one_and_update(doc! {"_id": oid}, doc! {"$set": set_doc}).await;
+        // Invalidate caches affected by author update
+        state.cache_del_key(AppState::AUTHORS_SUMMARY_CACHE_KEY).await;
+        state.cache_del_pref("search:books:").await;
     }
     Redirect::to("/authors")
 }
