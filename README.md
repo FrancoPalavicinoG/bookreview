@@ -1,5 +1,28 @@
 # BookReview
 
+## Quick Start - Docker Compose Options
+
+This project provides multiple Docker Compose configurations for different deployment scenarios:
+
+| File | Description | Services | Access URL | Use Case |
+|------|-------------|----------|------------|----------|
+| `docker-compose.basic.yml` | **Application + Database** | Web + MongoDB | `http://localhost:8000` | Development, Testing |
+| `docker-compose.proxy.yml` | **Application + Database + Reverse Proxy** | Apache + Web + MongoDB | `http://app.localhost` | Production |
+| `docker-compose.yml` | **Default (same as proxy)** | Apache + Web + MongoDB | `http://app.localhost` | Production |
+| `docker-compose.dev.yml` | **Legacy Development** | Web + MongoDB | `http://localhost:8000` | Backward compatibility |
+
+### Quick Commands
+
+```bash
+# Basic setup (recommended for development)
+docker compose -f docker-compose.basic.yml up -d --build
+
+# Production setup with reverse proxy
+docker compose up -d --build  # Uses docker-compose.yml (proxy setup)
+```
+
+---
+
 ## 1) Instalar Rust (macOS con Homebrew)
 
 ```bash
@@ -64,30 +87,50 @@ cp .env.example .env
 
 ---
 
-## 4) Running the Application
+## 4) Docker Compose Deployment Options
 
-### 4.1. Development Mode (Without Reverse Proxy)
+The project provides multiple Docker Compose configurations for different deployment scenarios:
 
-For development, run the application directly serving static files:
+### 4.1. Application + Database (Basic Setup)
 
-```bash
-docker compose -f docker-compose.dev.yml up -d --build
-docker compose -f docker-compose.dev.yml logs -f web
-```
-
-Access the application at:
-```
-http://127.0.0.1:8000/
-```
-
-### 4.2. Production Mode (With Apache Reverse Proxy)
-
-For production with Apache reverse proxy:
+**File:** `docker-compose.basic.yml`  
+**Use case:** Development, testing, simple deployments  
+**Services:** Web application + MongoDB  
+**Static files:** Served directly by the Rust application  
 
 ```bash
+# Start services
+docker compose -f docker-compose.basic.yml up -d --build
+
+# View logs
+docker compose -f docker-compose.basic.yml logs -f web
+
+# Stop services
+docker compose -f docker-compose.basic.yml down
+```
+
+**Access:** `http://localhost:8000`
+
+### 4.2. Application + Database + Reverse Proxy (Production Setup)
+
+**File:** `docker-compose.proxy.yml` or `docker-compose.yml` (default)  
+**Use case:** Production deployments, load balancing, SSL termination  
+**Services:** Apache reverse proxy + Web application + MongoDB  
+**Static files:** Served by Apache reverse proxy  
+
+```bash
+# Start services (using default compose file)
 docker compose up -d --build
+
+# Or explicitly use proxy file
+docker compose -f docker-compose.proxy.yml up -d --build
+
+# View logs
 docker compose logs -f apache
 docker compose logs -f web
+
+# Stop services
+docker compose down
 ```
 
 **Important:** Add this line to your `/etc/hosts` file:
@@ -95,49 +138,91 @@ docker compose logs -f web
 127.0.0.1 app.localhost
 ```
 
-Then access the application at:
-```
-http://app.localhost/
-```
+**Access:** `http://app.localhost`
 
-### 4.3. Seeder (Load Sample Data)
+### 4.3. Legacy Development Mode
 
-Load sample data into the database:
+**File:** `docker-compose.dev.yml`  
+**Note:** This file is maintained for backward compatibility. Use `docker-compose.basic.yml` for new projects.
 
 ```bash
-# Development mode
-docker compose -f docker-compose.dev.yml run --rm web sh -lc '/app/seeder'
-
-# Production mode  
-docker compose run --rm web sh -lc '/app/seeder'
+docker compose -f docker-compose.dev.yml up -d --build
 ```
 
-### 4.4. Testing Image Uploads
+### 4.4. Seeder (Load Sample Data)
+
+Load sample data into the database for any deployment:
+
+```bash
+# For basic setup
+docker compose -f docker-compose.basic.yml run --rm web sh -lc '/app/seeder'
+
+# For proxy setup (default)
+docker compose run --rm web sh -lc '/app/seeder'
+
+# For legacy dev setup
+docker compose -f docker-compose.dev.yml run --rm web sh -lc '/app/seeder'
+```
+
+### 4.5. Testing Image Uploads
 
 1. Go to `/upload` page in the application
 2. Upload book covers and author images
 3. Test static file access:
-   - **Development mode**: `http://127.0.0.1:8000/static/filename`
-   - **Production mode**: `http://app.localhost/static/filename`
+   - **Basic setup**: `http://localhost:8000/static/filename`
+   - **Proxy setup**: `http://app.localhost/static/filename`
 
 ---
 
-## 5) Architecture Overview
+## 5) Deployment Comparison
 
-### Reverse Proxy Setup
+| Feature | Basic Setup | Proxy Setup |
+|---------|-------------|-------------|
+| **File** | `docker-compose.basic.yml` | `docker-compose.proxy.yml` |
+| **Services** | Web + MongoDB | Apache + Web + MongoDB |
+| **Static Files** | Served by Rust app | Served by Apache |
+| **URL** | `http://localhost:8000` | `http://app.localhost` |
+| **Use Case** | Development, Testing | Production, Load Balancing |
+| **SSL Support** | Manual setup required | Easy Apache config |
+| **Performance** | Good for dev | Better for production |
+| **Complexity** | Simple | Medium |
 
-The application supports two modes:
+---
 
-**Without Reverse Proxy (Development):**
+## 6) Architecture Overview
+
+### Deployment Architectures
+
+The application supports two main deployment architectures:
+
+**Basic Architecture (Application + Database):**
+```
+[Client] → [Rust Web App:8000] → [MongoDB:27017]
+                ↓
+         [Static Files Served by App]
+```
+
+**Proxy Architecture (Application + Database + Reverse Proxy):**
+```
+[Client] → [Apache:80] → [Rust Web App:8000] → [MongoDB:27017]
+              ↓
+       [Static Files Served by Apache]
+```
+
+### Configuration Differences
+
+**Basic Setup (`docker-compose.basic.yml`):**
 - Application serves static files directly
 - `SERVE_STATIC_FILES=true`
-- Access via `http://localhost:8000`
+- Direct access via `http://localhost:8000`
+- Simpler setup, ideal for development
 
-**With Reverse Proxy (Production):**
+**Proxy Setup (`docker-compose.proxy.yml`):**
 - Apache serves static files
 - Application focuses on dynamic content
 - `SERVE_STATIC_FILES=false`
 - Access via `http://app.localhost`
+- Better for production (caching, SSL, load balancing)
 
 ### Image Upload System
 
@@ -148,16 +233,16 @@ The application supports two modes:
 
 ### Environment Variables
 
-| Variable | Description | Default | Example |
-|----------|-------------|---------|---------|
+| Variable | Description | Basic Setup | Proxy Setup |
+|----------|-------------|-------------|-------------|
 | `SERVE_STATIC_FILES` | Whether app serves static files | `true` | `false` |
-| `UPLOADS_DIR` | Directory for uploaded files | `uploads` | `/app/uploads` |
-| `MONGO_URI` | MongoDB connection string | - | `mongodb://localhost:27017` |
-| `DB_NAME` | Database name | - | `bookreview_dev` |
+| `UPLOADS_DIR` | Directory for uploaded files | `/app/uploads` | `/app/uploads` |
+| `MONGO_URI` | MongoDB connection string | `mongodb://mongo:27017` | `mongodb://mongo:27017` |
+| `DB_NAME` | Database name | `bookreview_dev` | `bookreview_dev` |
 
 ---
 
-## 6) API Endpoints
+## 7) API Endpoints
 
 ### Core Routes
 - `GET /` - Home page with dashboard
@@ -176,32 +261,46 @@ The application supports two modes:
 
 ---
 
-## 7) Docker Commands
+## 8) Docker Commands Reference
 
-### Build and Run
+### Build and Run Commands
+
 ```bash
-# Production with reverse proxy
+# Basic setup (Application + Database)
+docker compose -f docker-compose.basic.yml up -d --build
+
+# Proxy setup (Application + Database + Reverse Proxy)
+docker compose -f docker-compose.proxy.yml up -d --build
+# or using default file
 docker compose up -d --build
 
-# Development without reverse proxy
+# Legacy development setup
 docker compose -f docker-compose.dev.yml up -d --build
 ```
 
 ### View Logs
+
 ```bash
-# Apache logs
+# Basic setup
+docker compose -f docker-compose.basic.yml logs -f web
+docker compose -f docker-compose.basic.yml logs -f mongo
+
+# Proxy setup
 docker compose logs -f apache
-
-# Application logs
 docker compose logs -f web
-
-# Database logs
 docker compose logs -f mongo
+
+# All services at once
+docker compose logs -f
 ```
 
 ### Stop Services
+
 ```bash
-# Stop all services
+# Basic setup
+docker compose -f docker-compose.basic.yml down
+
+# Proxy setup (default)
 docker compose down
 
 # Stop and remove volumes (reset database)
@@ -209,15 +308,95 @@ docker compose down -v
 ```
 
 ### Reset and Rebuild
+
 ```bash
-# Complete reset with fresh build
+# Complete reset with fresh build (basic)
+docker compose -f docker-compose.basic.yml down -v
+docker compose -f docker-compose.basic.yml up -d --build
+
+# Complete reset with fresh build (proxy)
 docker compose down -v
 docker compose up -d --build
 ```
 
+### Seeder Commands
+
+```bash
+# Load sample data - basic setup
+docker compose -f docker-compose.basic.yml run --rm web sh -lc '/app/seeder'
+
+# Load sample data - proxy setup
+docker compose run --rm web sh -lc '/app/seeder'
+```
+
 ---
 
-## 8) Testing the Reverse Proxy
+## 9) Testing Different Deployments
+
+### Testing Basic Setup
+
+```bash
+# Start basic setup
+docker compose -f docker-compose.basic.yml up -d --build
+
+# Test application
+curl http://localhost:8000/health
+
+# Test static file serving (upload a file first via web interface)
+curl -I http://localhost:8000/static/your-uploaded-file.jpg
+# Should show Rocket/Rust headers
+
+# Load sample data
+docker compose -f docker-compose.basic.yml run --rm web sh -lc '/app/seeder'
+
+# Stop
+docker compose -f docker-compose.basic.yml down
+```
+
+### Testing Proxy Setup
+
+```bash
+# Add to /etc/hosts first
+echo "127.0.0.1 app.localhost" | sudo tee -a /etc/hosts
+
+# Start proxy setup
+docker compose up -d --build
+
+# Test application through proxy
+curl http://app.localhost/health
+
+# Test static file serving through Apache
+curl -I http://app.localhost/static/your-uploaded-file.jpg
+# Should show Apache headers
+
+# Load sample data
+docker compose run --rm web sh -lc '/app/seeder'
+
+# Stop
+docker compose down
+```
+
+### Comparing Both Setups
+
+```bash
+# Start basic setup on port 8000
+docker compose -f docker-compose.basic.yml up -d --build
+
+# In another terminal, start proxy setup on port 80
+docker compose up -d --build
+
+# Now you can compare:
+# Basic: http://localhost:8000
+# Proxy: http://app.localhost
+
+# Don't forget to stop both when done
+docker compose -f docker-compose.basic.yml down
+docker compose down
+```
+
+---
+
+## 10) Testing the Reverse Proxy
 
 ### 1. Setup hosts file
 Add to `/etc/hosts`:
@@ -225,9 +404,11 @@ Add to `/etc/hosts`:
 127.0.0.1 app.localhost
 ```
 
-### 2. Start services
+### 2. Start proxy setup
 ```bash
 docker compose up -d --build
+# or explicitly
+docker compose -f docker-compose.proxy.yml up -d --build
 ```
 
 ### 3. Test static file serving
@@ -237,7 +418,7 @@ http://app.localhost/upload
 
 # Verify Apache serves static files by checking headers:
 curl -I http://app.localhost/static/your-uploaded-file.jpg
-# Should show Apache headers
+# Should show Apache headers (Server: Apache/2.4.x)
 ```
 
 ### 4. Test application routing
@@ -250,22 +431,23 @@ curl http://app.localhost/authors
 curl http://app.localhost/books
 ```
 
-### 5. Compare with development mode
+### 5. Compare with basic setup
 ```bash
-# Stop production mode
+# Stop proxy setup
 docker compose down
 
-# Start development mode
-docker compose -f docker-compose.dev.yml up -d --build
+# Start basic setup
+docker compose -f docker-compose.basic.yml up -d --build
 
 # Test direct access
 curl http://localhost:8000/health
 curl -I http://localhost:8000/static/your-file.jpg
-# Should show Rocket headers
+# Should show Rocket headers (Server: Rocket)
 ```
 
 ---
-## 9) Ejecutar la app en **Kubernetes**
+
+## 11) Ejecutar la app en **Kubernetes**
 
 ### Prerrequisitos
 - `kubectl` instalado.
@@ -345,7 +527,7 @@ kind delete cluster --name bookreview
 
 ---
 
-## 10) Troubleshooting
+## 12) Troubleshooting
 
 ### Common Issues
 
@@ -368,21 +550,48 @@ kind delete cluster --name bookreview
 - Check network connectivity between containers
 - Verify environment variables are set correctly
 
+**5. Port conflicts**
+- Basic setup uses port 8000: ensure it's not in use
+- Proxy setup uses port 80: ensure it's not in use
+- Check running processes: `lsof -i :8000` or `lsof -i :80`
+
 ### Debug Commands
 
 ```bash
-# Check container status
+# Check container status for different setups
+docker compose -f docker-compose.basic.yml ps
 docker compose ps
 
-# View all logs
+# View all logs for basic setup
+docker compose -f docker-compose.basic.yml logs
+
+# View all logs for proxy setup
 docker compose logs
 
 # Inspect uploads volume
 docker volume inspect bookreview_uploads_data
 
-# Test file upload via curl
+# Test file upload via curl (basic setup)
+curl -X POST -F "file=@test.jpg" -F "upload_type=book_cover" -F "entity_id=test" http://localhost:8000/upload
+
+# Test file upload via curl (proxy setup)
 curl -X POST -F "file=@test.jpg" -F "upload_type=book_cover" -F "entity_id=test" http://app.localhost/upload
 
 # Test static file serving
-curl -I http://app.localhost/static/test_book_cover_*.jpg
+curl -I http://localhost:8000/static/test_book_cover_*.jpg  # Basic setup
+curl -I http://app.localhost/static/test_book_cover_*.jpg   # Proxy setup
+```
+
+### Quick Setup Verification
+
+```bash
+# Verify basic setup is working
+docker compose -f docker-compose.basic.yml up -d --build
+curl http://localhost:8000/health
+# Should return: {"status": "healthy"}
+
+# Verify proxy setup is working
+docker compose up -d --build
+curl http://app.localhost/health
+# Should return: {"status": "healthy"}
 ```
