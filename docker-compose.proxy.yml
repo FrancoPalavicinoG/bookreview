@@ -1,8 +1,3 @@
-# Default production setup: Application + Database + Reverse Proxy
-# For other deployment scenarios, use:
-# - docker-compose.basic.yml (app + database only)
-# - docker-compose.proxy.yml (app + database + reverse proxy)
-
 services:
   apache:
     build:
@@ -27,7 +22,7 @@ services:
       DB_NAME: "bookreview_dev"
       ROCKET_ADDRESS: "0.0.0.0"
       ROCKET_PORT: "8000"
-      SERVE_STATIC_FILES: "false"  # Disable static file serving when behind proxy
+      SERVE_STATIC_FILES: "false"
       UPLOADS_DIR: "/app/uploads"
     volumes:
       - uploads_data:/app/uploads
@@ -35,7 +30,6 @@ services:
       mongo:
         condition: service_healthy
     restart: unless-stopped
-    # No port mapping since we're behind reverse proxy
 
   mongo:
     image: mongo:7
