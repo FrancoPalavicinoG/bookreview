@@ -527,7 +527,88 @@ kind delete cluster --name bookreview
 
 ---
 
-## 12) Troubleshooting
+## 13) Load Testing
+
+The project includes comprehensive JMeter load tests to compare performance between deployment modes.
+
+### Quick Load Testing
+
+**Prerequisites:**
+```bash
+# Install JMeter (macOS)
+brew install jmeter
+
+# Verify installation
+jmeter -v
+```
+
+**Run Simple Tests:**
+```bash
+cd load-testing
+
+# Test basic deployment (app + database)
+docker compose -f ../docker-compose.basic.yml up -d --build
+./simple-test.sh basic 10  # 10 concurrent users
+
+# Test proxy deployment (apache + app + database)  
+docker compose -f ../docker-compose.yml up -d --build
+./simple-test.sh proxy 10  # 10 concurrent users
+```
+
+**Collect System Metrics:**
+```bash
+# Monitor container resource usage during tests
+./collect-metrics.sh basic 300   # Monitor for 5 minutes
+./collect-metrics.sh proxy 300   # Monitor for 5 minutes
+```
+
+### Complete Test Suite
+
+Run all test scenarios (1, 10, 100, 1000, 5000 users × 5 minutes each):
+
+```bash
+cd load-testing
+./run-load-tests.sh  # Takes ~50 minutes total
+```
+
+### Test Results
+
+Results are saved in `load-testing/results/`:
+- **JMeter Results**: `.jtl` files with response times, throughput, error rates
+- **HTML Reports**: Interactive dashboards in `*_report/` directories  
+- **System Metrics**: CSV files with CPU, memory, network, disk usage
+- **Summary Report**: `load_test_report.md` with comparison analysis
+
+### Metrics Collected
+
+**Application Performance:**
+- Response times (min, max, average, percentiles)
+- Throughput (requests per second)
+- Error rates and HTTP status codes
+- Request distribution across endpoints
+
+**System Resources:**
+- CPU usage percentage per container
+- Memory usage (MB and percentage)
+- Network I/O (received/transmitted data)
+- Disk I/O (read/write operations)
+- Process counts
+
+### Analysis Framework
+
+Compare the two deployment architectures across:
+
+1. **Response Times**: Which deployment responds faster?
+2. **Throughput**: Which can handle more requests per second?
+3. **Resource Efficiency**: Which uses fewer system resources?
+4. **Scalability**: Which handles high load better?
+5. **Error Patterns**: Which deployment is more stable under stress?
+
+For detailed instructions, see [`load-testing/README.md`](load-testing/README.md).
+
+---
+
+## 14) Troubleshooting
 
 ### Common Issues
 
