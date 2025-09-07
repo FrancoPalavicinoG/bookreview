@@ -7,10 +7,12 @@ use rocket_dyn_templates::Template;
 use rocket_cors::{CorsOptions, AllowedOrigins, AllowedHeaders};
 use serde_json::json;
 use rocket::form::{Form, FromForm};
-use rocket::response::Redirect;
+use crate::models::{Book, Review};
 
-// Declaramos módulos (archivos) aunque estén vacíos por ahora.
-// No los usamos todavía para evitar errores de compilación.
+use std::sync::Arc;
+use futures_util::stream::TryStreamExt;
+
+// Módulos
 mod db;
 mod models;
 mod routes {
@@ -32,29 +34,9 @@ struct SearchForm {
 // ------- Rutas base -------
 #[get("/")]
 async fn home(state: &State<db::AppState>) -> Template {
-    let authors_summary = match state.get_authors_summary().await {
-        Ok(summaries) => summaries,
-        Err(e) => {
-            eprintln!("Error getting authors summary: {}", e);
-            vec![]
-        }
-    };
-
-    let top_rated_books = match state.get_top_rated_books().await {
-        Ok(books) => books,
-        Err(e) => {
-            eprintln!("Error getting top rated books: {}", e);
-            vec![]
-        }
-    };
-
-    let top_selling_books = match state.get_top_selling_books().await {
-        Ok(books) => books,
-        Err(e) => {
-            eprintln!("Error getting top selling books: {}", e);
-            vec![]
-        }
-    };
+    let authors_summary = state.get_authors_summary().await.unwrap_or_default();
+    let top_rated_books = state.get_top_rated_books().await.unwrap_or_default();
+    let top_selling_books = state.get_top_selling_books().await.unwrap_or_default();
 
     let context = json!({
         "authors": authors_summary,
@@ -63,7 +45,7 @@ async fn home(state: &State<db::AppState>) -> Template {
         "search_results": null,
         "show_search_results": false
     });
-    
+
     Template::render("home", &context)
 }
 
@@ -72,37 +54,11 @@ async fn search(q: String, page: Option<i64>, state: &State<db::AppState>) -> Te
     let page = page.unwrap_or(1);
     let per_page = 10;
 
-    let search_results = match state.search_books(&q, page, per_page).await {
-        Ok(results) => Some(results),
-        Err(e) => {
-            eprintln!("Error searching books: {}", e);
-            None
-        }
-    };
+    let search_results = state.search_books(&q, page, per_page).await.ok();
 
-    let authors_summary = match state.get_authors_summary().await {
-        Ok(summaries) => summaries,
-        Err(e) => {
-            eprintln!("Error getting authors summary: {}", e);
-            vec![]
-        }
-    };
-
-    let top_rated_books = match state.get_top_rated_books().await {
-        Ok(books) => books,
-        Err(e) => {
-            eprintln!("Error getting top rated books: {}", e);
-            vec![]
-        }
-    };
-
-    let top_selling_books = match state.get_top_selling_books().await {
-        Ok(books) => books,
-        Err(e) => {
-            eprintln!("Error getting top selling books: {}", e);
-            vec![]
-        }
-    };
+    let authors_summary = state.get_authors_summary().await.unwrap_or_default();
+    let top_rated_books = state.get_top_rated_books().await.unwrap_or_default();
+    let top_selling_books = state.get_top_selling_books().await.unwrap_or_default();
 
     let context = json!({
         "authors": authors_summary,
@@ -111,7 +67,7 @@ async fn search(q: String, page: Option<i64>, state: &State<db::AppState>) -> Te
         "search_results": search_results,
         "show_search_results": true
     });
-    
+
     Template::render("home", &context)
 }
 
@@ -120,8 +76,7 @@ fn health() -> &'static str {
     "ok"
 }
 
-// CORS abierto para desarrollo.
-// Ajusta AllowedOrigins si quieres restringirlo.
+// CORS abierto para desarrollo
 fn cors() -> rocket_cors::Cors {
     let allowed_origins = AllowedOrigins::all();
 
@@ -149,16 +104,28 @@ fn cors() -> rocket_cors::Cors {
 
 #[launch]
 async fn rocket() -> Rocket<Build> {
-    // Requiere que implementemos db::init_db() en el siguiente paso.
-    let state = db::init_db().await;
+    // Inicializamos DB y SearchEngine
+    let mut state = db::init_db().await;
+
+    // Opcional: sincronizar todos los libros y reviews existentes a OpenSearch
+    if !state.search.is::<search::NullSearchEngine>() {
+        let books_collection = state.db.collection::<Book>("books");
+        let mut cursor = books_collection.find(None, None).await.unwrap();
+        while let Some(book) = cursor.try_next().await.unwrap() {
+            state.search.upsert_book(&book, &"Autor Desconocido".to_string()).await.ok();
+        }
+
+        let reviews_collection = state.db.collection::<Review>("reviews");
+        let mut cursor = reviews_collection.find(None, None).await.unwrap();
+        while let Some(review) = cursor.try_next().await.unwrap() {
+            state.search.upsert_review(&review).await.ok();
+        }
+    }
 
     rocket::build()
         .manage(state)
-        // Templates Tera (los usaremos cuando hagamos las vistas)
         .attach(Template::fairing())
-        // CORS dev
         .attach(cors())
-        // Rutas mínimas por ahora (agregaremos las demás más adelante)
         .mount("/", routes![home, search, health])
         .mount("/authors", routes::authors::routes())
         .mount("/books", routes::books::routes())

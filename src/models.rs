@@ -98,3 +98,20 @@ pub struct PaginatedSearchResults {
     pub has_prev: bool,
     pub query: String,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BookSearchDoc {
+    pub book_id: String,
+    pub title: String,
+    pub summary: Option<String>,
+    pub author_name: String,
+    pub publication_date: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReviewSearchDoc {
+    pub review_id: String,
+    pub book_id: String,
+    pub text: String,
+    pub score: i32,
+}

@@ -135,21 +135,31 @@ pub async fn create(state: &State<AppState>, form: Form<ReviewForm>) -> Redirect
 
     // validar book_id y existencia
     let book_oid = match ObjectId::parse_str(&f.book_id) { Ok(x)=>x, Err(_)=> return Redirect::to("/reviews") };
-    let exists = b_c.find_one(doc!{"_id": &book_oid}).await.ok().flatten().is_some();
-    if !exists { return Redirect::to("/reviews"); }
+    let book = match b_c.find_one(doc!{"_id": &book_oid}).await.ok().flatten() {
+        Some(b) => b,
+        None => return Redirect::to("/reviews"),
+    };
 
-    // validar score
     let score = f.score.clamp(1, 5);
     let up_votes = f.up_votes.unwrap_or(0).max(0);
 
-    let r = Review {
+    let mut r = Review {
         id: None,
         book_id: book_oid,
         text: f.text,
         score,
         up_votes,
     };
-    let _ = r_c.insert_one(&r).await;
+
+    let insert_res = r_c.insert_one(&r, None).await;
+    if let Ok(res) = insert_res {
+        r.id = res.inserted_id.as_object_id();
+        // agregar a OpenSearch
+        if let Err(e) = state.search.upsert_review(&r, &book.title).await {
+            eprintln!("Error indexing review in OpenSearch: {e}");
+        }
+    }
+
     Redirect::to("/reviews")
 }
 
@@ -198,9 +208,10 @@ pub async fn update(state: &State<AppState>, id: &str, form: Form<ReviewForm>) -
     let oid = match ObjectId::parse_str(id) { Ok(x)=>x, Err(_)=> return Redirect::to("/reviews") };
     let book_oid = match ObjectId::parse_str(&f.book_id) { Ok(x)=>x, Err(_)=> return Redirect::to("/reviews") };
 
-    // validar libro
-    let exists = b_c.find_one(doc!{"_id": &book_oid}).await.ok().flatten().is_some();
-    if !exists { return Redirect::to("/reviews"); }
+    let book = match b_c.find_one(doc!{"_id": &book_oid}).await.ok().flatten() {
+        Some(b) => b,
+        None => return Redirect::to("/reviews"),
+    };
 
     let score = f.score.clamp(1, 5);
     let up_votes = f.up_votes.unwrap_or(0).max(0);
@@ -217,6 +228,13 @@ pub async fn update(state: &State<AppState>, id: &str, form: Form<ReviewForm>) -
         )
         .await;
 
+    // Traer la review actualizada para indexarla
+    if let Ok(Some(updated_review)) = r_c.find_one(doc!{"_id": oid}).await {
+        if let Err(e) = state.search.upsert_review(&updated_review, &book.title).await {
+            eprintln!("Error updating review in OpenSearch: {e}");
+        }
+    }
+
     Redirect::to("/reviews")
 }
 
@@ -224,9 +242,16 @@ pub async fn update(state: &State<AppState>, id: &str, form: Form<ReviewForm>) -
 #[post("/delete/<id>")]
 pub async fn delete(state: &State<AppState>, id: &str) -> Redirect {
     let r_c = reviews_col(state);
+
     if let Ok(oid) = ObjectId::parse_str(id) {
         let _ = r_c.delete_one(doc!{"_id": oid}).await;
+
+        // eliminar de OpenSearch
+        if let Err(e) = state.search.delete_review(id).await {
+            eprintln!("Error deleting review from OpenSearch: {e}");
+        }
     }
+
     Redirect::to("/reviews")
 }
 

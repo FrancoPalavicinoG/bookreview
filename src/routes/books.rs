@@ -163,7 +163,17 @@ pub async fn create(state: &State<AppState>, form: Form<BookForm>) -> Redirect {
         publication_date: f.publication_date,
         total_sales: None,
     };
-    let _ = books_c.insert_one(&b).await;
+
+    let insert_res = books_c.insert_one(&b, None).await;
+    if let Ok(res) = insert_res {
+        // set id for search indexing
+        b.id = res.inserted_id.as_object_id();
+        // agregar a OpenSearch
+        if let Err(e) = state.search.upsert_book(&b, &authors_c.find_one(doc!{"_id": &author_oid}).await.unwrap().unwrap().name).await {
+            eprintln!("Error indexing book in OpenSearch: {e}");
+        }
+    }
+
     Redirect::to("/books")
 }
 
@@ -231,6 +241,16 @@ pub async fn update(state: &State<AppState>, id: &str, form: Form<BookForm>) -> 
     if let Some(p) = f.publication_date { set_doc.insert("publication_date", p); }
 
     let _ = books_c.find_one_and_update(doc!{"_id": oid}, doc!{"$set": set_doc}).await;
+
+    // Traer el libro actualizado para indexarlo
+    if let Ok(Some(updated_book)) = books_c.find_one(doc!{"_id": oid}).await {
+        if let Ok(Some(author)) = authors_c.find_one(doc!{"_id": &updated_book.author_id}).await {
+            if let Err(e) = state.search.upsert_book(&updated_book, &author.name).await {
+                eprintln!("Error indexing updated book in OpenSearch: {e}");
+            }
+        }
+    }
+
     Redirect::to("/books")
 }
 
@@ -245,12 +265,15 @@ pub async fn delete(state: &State<AppState>, id: &str) -> Redirect {
     if let Ok(book_id) = ObjectId::parse_str(id) {
         // eliminar reseñas asociadas
         let _ = reviews_c.delete_many(doc! {"book_id": &book_id}).await;
-
         // eliminar ventas asociadas
         let _ = sales_c.delete_many(doc! {"book_id": &book_id}).await;
-
         // eliminar el libro
         let _ = books_c.delete_one(doc! {"_id": &book_id}).await;
+
+        // eliminar de OpenSearch
+        if let Err(e) = state.search.delete_book(id).await {
+            eprintln!("Error deleting book from OpenSearch: {e}");
+        }
     }
 
     Redirect::to("/books")

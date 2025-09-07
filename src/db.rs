@@ -1,6 +1,7 @@
 use dotenvy::dotenv;
 use std::env;
 use futures_util::stream::TryStreamExt;
+use std::sync::Arc;
 
 use mongodb::{
     bson::{doc, oid::ObjectId},
@@ -8,9 +9,12 @@ use mongodb::{
     Client, Database, IndexModel,
 };
 use crate::models::{AuthorSummary, TopRatedBook, ReviewWithScore, TopSellingBook, SearchResult, PaginatedSearchResults};
+use crate::search::{SearchEngine, OpenSearchEngine};
+use crate::search::NullSearchEngine;
 
 pub struct AppState {
     pub db: Database,
+    pub search: Arc<dyn SearchEngine>,
 }
 
 pub async fn ensure_indexes(db: &Database) -> mongodb::error::Result<()> {
@@ -89,7 +93,19 @@ pub async fn init_db() -> AppState {
         eprintln!("Failed to create indexes: {e}");
     }
 
-    AppState { db }
+    let search: Arc<dyn SearchEngine> = if let Ok(url) = env::var("OPENSEARCH_URL") {
+        match OpenSearchEngine::new(&url).await {
+            Ok(engine) => Arc::new(engine),
+            Err(e) => {
+                eprintln!("Error connecting to OpenSearch: {e}, using NullSearchEngine");
+                Arc::new(NullSearchEngine)
+            }
+        }
+    } else {
+        Arc::new(NullSearchEngine)
+    };
+
+    AppState { db, search }
 }
 
 impl AppState {
@@ -523,88 +539,93 @@ impl AppState {
         Ok(top_selling_books)
     }
 
-    pub async fn search_books(&self, query: &str, page: i64, per_page: i64) -> mongodb::error::Result<PaginatedSearchResults> {
-        let skip = (page - 1) * per_page;
-        
-        // Split the query into words and create search terms
-        let search_terms: Vec<&str> = query.split_whitespace().collect();
-        
-        if search_terms.is_empty() {
-            return Ok(PaginatedSearchResults {
-                results: vec![],
-                current_page: page,
-                total_pages: 0,
-                total_results: 0,
-                has_next: false,
-                has_prev: false,
-                query: query.to_string(),
-            });
-        }
-
-        // Create regex patterns for each search term
-        let regex_patterns: Vec<mongodb::bson::Document> = search_terms
-            .iter()
-            .map(|term| doc! { 
-                "$or": [
-                    { "title": { "$regex": term, "$options": "i" } },
-                    { "summary": { "$regex": term, "$options": "i" } }
-                ]
-            })
-            .collect();
-
-        let search_filter = doc! {
-            "$and": regex_patterns
-        };
-
-        // Count total results
-        let books_collection = self.db.collection::<mongodb::bson::Document>("books");
-        let total_results = books_collection.count_documents(search_filter.clone()).await?;
-        let total_pages = (total_results as f64 / per_page as f64).ceil() as i64;
-
-        // Get paginated results
-        let pipeline = vec![
-            doc! { "$match": search_filter },
-            doc! {
-                "$lookup": {
-                    "from": "authors",
-                    "localField": "author_id",
-                    "foreignField": "_id",
-                    "as": "author"
-                }
-            },
-            doc! { "$unwind": "$author" },
-            doc! {
-                "$project": {
-                    "book_id": "$_id",
-                    "title": 1,
-                    "author_name": "$author.name",
-                    "summary": 1,
-                    "publication_date": 1
-                }
-            },
-            doc! { "$sort": { "title": 1 } },
-            doc! { "$skip": skip },
-            doc! { "$limit": per_page }
-        ];
-
-        let cursor = books_collection.aggregate(pipeline).await?;
-        let documents: Vec<mongodb::bson::Document> = cursor.try_collect().await?;
-        
-        let mut results = Vec::new();
-        for doc in documents {
-            if let Ok(result) = mongodb::bson::from_document::<SearchResult>(doc) {
-                results.push(result);
-            }
-        }
-
-        Ok(PaginatedSearchResults {
-            results,
-            current_page: page,
-            total_pages,
-            total_results: total_results as i64,
-            has_next: page < total_pages,
-            has_prev: page > 1,
-            query: query.to_string(),
-        })
+    pub async fn search_books(&self, query: &str, page: i64, per_page: i64) -> anyhow::Result<PaginatedSearchResults> {
+        let results = self.search.search(query, page, per_page).await?;
+        Ok(results)
     }
+
+    // pub async fn search_books(&self, query: &str, page: i64, per_page: i64) -> mongodb::error::Result<PaginatedSearchResults> {
+    //     let skip = (page - 1) * per_page;
+        
+    //     // Split the query into words and create search terms
+    //     let search_terms: Vec<&str> = query.split_whitespace().collect();
+        
+    //     if search_terms.is_empty() {
+    //         return Ok(PaginatedSearchResults {
+    //             results: vec![],
+    //             current_page: page,
+    //             total_pages: 0,
+    //             total_results: 0,
+    //             has_next: false,
+    //             has_prev: false,
+    //             query: query.to_string(),
+    //         });
+    //     }
+
+    //     // Create regex patterns for each search term
+    //     let regex_patterns: Vec<mongodb::bson::Document> = search_terms
+    //         .iter()
+    //         .map(|term| doc! { 
+    //             "$or": [
+    //                 { "title": { "$regex": term, "$options": "i" } },
+    //                 { "summary": { "$regex": term, "$options": "i" } }
+    //             ]
+    //         })
+    //         .collect();
+
+    //     let search_filter = doc! {
+    //         "$and": regex_patterns
+    //     };
+
+    //     // Count total results
+    //     let books_collection = self.db.collection::<mongodb::bson::Document>("books");
+    //     let total_results = books_collection.count_documents(search_filter.clone()).await?;
+    //     let total_pages = (total_results as f64 / per_page as f64).ceil() as i64;
+
+    //     // Get paginated results
+    //     let pipeline = vec![
+    //         doc! { "$match": search_filter },
+    //         doc! {
+    //             "$lookup": {
+    //                 "from": "authors",
+    //                 "localField": "author_id",
+    //                 "foreignField": "_id",
+    //                 "as": "author"
+    //             }
+    //         },
+    //         doc! { "$unwind": "$author" },
+    //         doc! {
+    //             "$project": {
+    //                 "book_id": "$_id",
+    //                 "title": 1,
+    //                 "author_name": "$author.name",
+    //                 "summary": 1,
+    //                 "publication_date": 1
+    //             }
+    //         },
+    //         doc! { "$sort": { "title": 1 } },
+    //         doc! { "$skip": skip },
+    //         doc! { "$limit": per_page }
+    //     ];
+
+    //     let cursor = books_collection.aggregate(pipeline).await?;
+    //     let documents: Vec<mongodb::bson::Document> = cursor.try_collect().await?;
+        
+    //     let mut results = Vec::new();
+    //     for doc in documents {
+    //         if let Ok(result) = mongodb::bson::from_document::<SearchResult>(doc) {
+    //             results.push(result);
+    //         }
+    //     }
+
+    //     Ok(PaginatedSearchResults {
+    //         results,
+    //         current_page: page,
+    //         total_pages,
+    //         total_results: total_results as i64,
+    //         has_next: page < total_pages,
+    //         has_prev: page > 1,
+    //         query: query.to_string(),
+    //     })
+    // }
 }
