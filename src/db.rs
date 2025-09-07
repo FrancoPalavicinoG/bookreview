@@ -458,7 +458,15 @@ impl AppState {
                 top_books.push(book);
             }
         }
-        
+
+        // Seed per-book average cache using the scores computed by this pipeline.
+        // This makes calls to `get_book_average_score_cached` a HIT.
+        for b in &top_books {
+            let key = Self::key_book_avg(&b.book_id.to_hex());
+            // store the average 
+            self.cache_set_json(&key, &b.average_score, Some(Self::TTL_BOOK_AVG)).await;
+            eprintln!("[cache] SEED {key}");
+        }
         Ok(top_books)
     }
 
