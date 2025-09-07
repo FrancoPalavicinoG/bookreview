@@ -7,6 +7,7 @@
       <a href="/books" style="text-decoration: none;"><button type="button">Books</button></a>
       <a href="/reviews" style="text-decoration: none;"><button type="button">Reviews</button></a>
       <a href="/sales" style="text-decoration: none;"><button type="button">Sales</button></a>
+      <a href="/upload" style="text-decoration: none;"><button type="button">Upload</button></a>
     </div>
   </div>
 </header>

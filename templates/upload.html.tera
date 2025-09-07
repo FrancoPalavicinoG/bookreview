@@ -1,0 +1,87 @@
+{% extends "base" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Upload Images</h2>
+    
+    {% if flash %}
+        <div class="alert alert-{% if flash.kind == 'success' %}success{% else %}danger{% endif %}">
+            {{ flash.message }}
+        </div>
+    {% endif %}
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Upload Book Cover</h5>
+                </div>
+                <div class="card-body">
+                    <form action="/upload" method="post" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="book_file" class="form-label">Select book cover image</label>
+                            <input type="file" class="form-control" id="book_file" name="file" accept="image/*" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="book_entity_id" class="form-label">Select Book</label>
+                            <select class="form-control" id="book_entity_id" name="entity_id" required>
+                                <option value="">-- Select a Book --</option>
+                                {% for book in books %}
+                                    <option value="{{ book.id }}">{{ book.title }} (by {{ book.author_name }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <input type="hidden" name="upload_type" value="book_cover">
+                        <button type="submit" class="btn btn-primary">Upload Book Cover</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Upload Author Image</h5>
+                </div>
+                <div class="card-body">
+                    <form action="/upload" method="post" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="author_file" class="form-label">Select author image</label>
+                            <input type="file" class="form-control" id="author_file" name="file" accept="image/*" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="author_entity_id" class="form-label">Select Author</label>
+                            <select class="form-control" id="author_entity_id" name="entity_id" required>
+                                <option value="">-- Select an Author --</option>
+                                {% for author in authors %}
+                                    <option value="{{ author.id }}">{{ author.name }}{% if author.country %} ({{ author.country }}){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <input type="hidden" name="upload_type" value="author_image">
+                        <button type="submit" class="btn btn-primary">Upload Author Image</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+<style>
+.alert {
+    padding: 0.75rem 1.25rem;
+    margin-bottom: 1rem;
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+}
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+</style>
+{% endblock %}

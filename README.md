@@ -49,59 +49,223 @@ MONGO_URI=mongodb://localhost:27017
 
 # Nombre de la base de datos (dev)
 DB_NAME=bookreview_dev
+
+# Static file serving (true/false)
+SERVE_STATIC_FILES=true
+
+# Uploads directory path
+UPLOADS_DIR=uploads
 ```
 
+**Tip:** Puedes usar el archivo `.env.example` como plantilla:
+```bash
+cp .env.example .env
+```
 
 ---
 
-## 4) Correr la app con Docker
+## 4) Running the Application
 
-### 4.1. Levantar la app y Mongo DB
-Desde la raíz del proyecto:
+### 4.1. Development Mode (Without Reverse Proxy)
+
+For development, run the application directly serving static files:
 
 ```bash
-docker compose up -d --build
-docker compose logs -f web   # ver salida de Rocket
+docker compose -f docker-compose.dev.yml up -d --build
+docker compose -f docker-compose.dev.yml logs -f web
 ```
 
-Deberías ver algo como:
-```
-Rocket has launched from http://0.0.0.0:8000
-```
-
-Comprueba salud:
-```bash
-curl http://127.0.0.1:8000/health
-# ok
-```
-
-Abre la web:
+Access the application at:
 ```
 http://127.0.0.1:8000/
 ```
 
----
+### 4.2. Production Mode (With Apache Reverse Proxy)
 
-### 4.2. Seeder
-El seeder **no** corre automáticamente. Ejecútalo manualmente:
+For production with Apache reverse proxy:
 
 ```bash
+docker compose up -d --build
+docker compose logs -f apache
+docker compose logs -f web
+```
+
+**Important:** Add this line to your `/etc/hosts` file:
+```
+127.0.0.1 app.localhost
+```
+
+Then access the application at:
+```
+http://app.localhost/
+```
+
+### 4.3. Seeder (Load Sample Data)
+
+Load sample data into the database:
+
+```bash
+# Development mode
+docker compose -f docker-compose.dev.yml run --rm web sh -lc '/app/seeder'
+
+# Production mode  
 docker compose run --rm web sh -lc '/app/seeder'
 ```
+
+### 4.4. Testing Image Uploads
+
+1. Go to `/upload` page in the application
+2. Upload book covers and author images
+3. Test static file access:
+   - **Development mode**: `http://127.0.0.1:8000/static/filename`
+   - **Production mode**: `http://app.localhost/static/filename`
+
 ---
 
-### 4.3. Apagar / Reset DB
+## 5) Architecture Overview
+
+### Reverse Proxy Setup
+
+The application supports two modes:
+
+**Without Reverse Proxy (Development):**
+- Application serves static files directly
+- `SERVE_STATIC_FILES=true`
+- Access via `http://localhost:8000`
+
+**With Reverse Proxy (Production):**
+- Apache serves static files
+- Application focuses on dynamic content
+- `SERVE_STATIC_FILES=false`
+- Access via `http://app.localhost`
+
+### Image Upload System
+
+- **Supported formats**: JPG, JPEG, PNG, GIF, WebP
+- **Storage**: Configurable directory via `UPLOADS_DIR`
+- **Organization**: Automatic categorization by type (book covers, author images)
+- **Unique naming**: UUID-based filenames to prevent conflicts
+
+### Environment Variables
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|---------|
+| `SERVE_STATIC_FILES` | Whether app serves static files | `true` | `false` |
+| `UPLOADS_DIR` | Directory for uploaded files | `uploads` | `/app/uploads` |
+| `MONGO_URI` | MongoDB connection string | - | `mongodb://localhost:27017` |
+| `DB_NAME` | Database name | - | `bookreview_dev` |
+
+---
+
+## 6) API Endpoints
+
+### Core Routes
+- `GET /` - Home page with dashboard
+- `GET /health` - Health check endpoint
+- `GET /upload` - Image upload interface
+- `POST /upload` - Handle file uploads
+
+### Resource Routes
+- `/authors/*` - Author management
+- `/books/*` - Book management  
+- `/reviews/*` - Review management
+- `/sales/*` - Sales data management
+
+### Static Files
+- `/static/*` - Static file serving (when not behind proxy)
+
+---
+
+## 7) Docker Commands
+
+### Build and Run
 ```bash
-# Apagar (mantiene datos en el volumen)
+# Production with reverse proxy
+docker compose up -d --build
+
+# Development without reverse proxy
+docker compose -f docker-compose.dev.yml up -d --build
+```
+
+### View Logs
+```bash
+# Apache logs
+docker compose logs -f apache
+
+# Application logs
+docker compose logs -f web
+
+# Database logs
+docker compose logs -f mongo
+```
+
+### Stop Services
+```bash
+# Stop all services
 docker compose down
 
-# Apagar y borrar volumen de Mongo (reinicia la base desde cero)
+# Stop and remove volumes (reset database)
 docker compose down -v
+```
 
+### Reset and Rebuild
+```bash
+# Complete reset with fresh build
+docker compose down -v
+docker compose up -d --build
 ```
 
 ---
-## 5) Ejecutar la app en **Kubernetes**
+
+## 8) Testing the Reverse Proxy
+
+### 1. Setup hosts file
+Add to `/etc/hosts`:
+```
+127.0.0.1 app.localhost
+```
+
+### 2. Start services
+```bash
+docker compose up -d --build
+```
+
+### 3. Test static file serving
+```bash
+# Upload a test image via the web interface at:
+http://app.localhost/upload
+
+# Verify Apache serves static files by checking headers:
+curl -I http://app.localhost/static/your-uploaded-file.jpg
+# Should show Apache headers
+```
+
+### 4. Test application routing
+```bash
+# Health check through proxy
+curl http://app.localhost/health
+
+# API endpoints through proxy  
+curl http://app.localhost/authors
+curl http://app.localhost/books
+```
+
+### 5. Compare with development mode
+```bash
+# Stop production mode
+docker compose down
+
+# Start development mode
+docker compose -f docker-compose.dev.yml up -d --build
+
+# Test direct access
+curl http://localhost:8000/health
+curl -I http://localhost:8000/static/your-file.jpg
+# Should show Rocket headers
+```
+
+---
+## 9) Ejecutar la app en **Kubernetes**
 
 ### Prerrequisitos
 - `kubectl` instalado.
@@ -177,4 +341,48 @@ kubectl delete -f k8s/bookreview.yaml
 - **Borrar** el cluster kind (si usaste kind):
 ```bash
 kind delete cluster --name bookreview
+```
+
+---
+
+## 10) Troubleshooting
+
+### Common Issues
+
+**1. "app.localhost" not resolving**
+- Ensure `/etc/hosts` contains: `127.0.0.1 app.localhost`
+- Try clearing DNS cache: `sudo dscacheutil -flushcache` (macOS)
+
+**2. Static files not loading behind proxy**
+- Check Apache container logs: `docker compose logs apache`
+- Verify uploads volume is mounted correctly
+- Ensure file permissions are correct
+
+**3. File upload fails**
+- Check uploads directory exists and is writable
+- Verify file size limits in Apache configuration
+- Check application logs for detailed errors
+
+**4. Database connection issues**
+- Ensure MongoDB container is healthy: `docker compose ps`
+- Check network connectivity between containers
+- Verify environment variables are set correctly
+
+### Debug Commands
+
+```bash
+# Check container status
+docker compose ps
+
+# View all logs
+docker compose logs
+
+# Inspect uploads volume
+docker volume inspect bookreview_uploads_data
+
+# Test file upload via curl
+curl -X POST -F "file=@test.jpg" -F "upload_type=book_cover" -F "entity_id=test" http://app.localhost/upload
+
+# Test static file serving
+curl -I http://app.localhost/static/test_book_cover_*.jpg
 ```

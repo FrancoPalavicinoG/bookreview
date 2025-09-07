@@ -3,11 +3,11 @@ use std::env;
 use futures_util::stream::TryStreamExt;
 
 use mongodb::{
-    bson::{doc, oid::ObjectId},
+    bson::doc,
     options::{ClientOptions, IndexOptions},
     Client, Database, IndexModel,
 };
-use crate::models::{AuthorSummary, TopRatedBook, ReviewWithScore, TopSellingBook, SearchResult, PaginatedSearchResults};
+use crate::models::{AuthorSummary, TopRatedBook, TopSellingBook, SearchResult, PaginatedSearchResults, BookWithAuthor};
 
 pub struct AppState {
     pub db: Database,
@@ -17,26 +17,22 @@ pub async fn ensure_indexes(db: &Database) -> mongodb::error::Result<()> {
     // ========== BOOKS ==========
     let books = db.collection::<mongodb::bson::Document>("books");
 
-    // Si ya tenías un text index solo en "summary", conviene reemplazarlo por uno combinado:
-    // keys: { title: "text", summary: "text" }
     let text_idx = IndexModel::builder()
         .keys(doc! { "title": "text", "summary": "text" })
         .build();
     let _ = books.create_index(text_idx).await?;
 
-    // author_id (para filtrar por autor)
     let author_idx = IndexModel::builder()
         .keys(doc! { "author_id": 1 })
         .build();
     let _ = books.create_index(author_idx).await?;
 
-    // total_sales (para top 50 más vendidos)
+
     let total_sales_idx = IndexModel::builder()
         .keys(doc! { "total_sales": -1 })
         .build();
     let _ = books.create_index(total_sales_idx).await?;
 
-    // opcional: publicación (si filtras/ordenas por fecha)
     let pub_date_idx = IndexModel::builder()
         .keys(doc! { "publication_date": 1 })
         .build();
@@ -59,13 +55,11 @@ pub async fn ensure_indexes(db: &Database) -> mongodb::error::Result<()> {
         .build();
     let _ = sales.create_index(sales_unique).await?;
 
-    // Index por año (tendencias por año)
     let year_idx = IndexModel::builder()
         .keys(doc! { "year": 1 })
         .build();
     let _ = sales.create_index(year_idx).await?;
 
-    // opcional: si haces muchas sumas por libro
     let sales_book_idx = IndexModel::builder()
         .keys(doc! { "book_id": 1 })
         .build();
@@ -180,7 +174,6 @@ impl AppState {
                     }
                 }
             },
-            // Project final structure
             doc! {
                 "$project": {
                     "author_id": "$_id",
@@ -300,7 +293,6 @@ impl AppState {
                     }
                 }
             },
-            // Project final structure
             doc! {
                 "$project": {
                     "book_id": "$_id",
@@ -338,7 +330,6 @@ impl AppState {
     }
 
     pub async fn get_top_selling_books(&self) -> mongodb::error::Result<Vec<TopSellingBook>> {
-        // First, let's create a pipeline to get all books with their total sales and publication year
         let pipeline = vec![
             // Start with books
             doc! {
@@ -418,8 +409,6 @@ impl AppState {
                     "author_total_sales": { "$sum": "$author_sales.units" }
                 }
             },
-            // Now we need to check if this book was in top 5 for its publication year
-            // This is complex, so we'll do a lookup to all books from the same year
             doc! {
                 "$lookup": {
                     "from": "books",
@@ -494,7 +483,6 @@ impl AppState {
                     }
                 }
             },
-            // Project final structure
             doc! {
                 "$project": {
                     "book_id": "$_id",
@@ -606,5 +594,58 @@ impl AppState {
             has_prev: page > 1,
             query: query.to_string(),
         })
+    }
+
+    // Get all authors for dropdown selection
+    pub async fn get_all_authors(&self) -> mongodb::error::Result<Vec<crate::models::Author>> {
+        let collection = self.db.collection::<crate::models::Author>("authors");
+        let cursor = collection.find(doc! {}).await?;
+        let authors: Vec<crate::models::Author> = cursor.try_collect().await?;
+        Ok(authors)
+    }
+
+    // Get all books with author names for dropdown selection
+    pub async fn get_all_books_with_authors(&self) -> mongodb::error::Result<Vec<BookWithAuthor>> {
+        let pipeline = vec![
+            doc! {
+                "$lookup": {
+                    "from": "authors",
+                    "localField": "author_id",
+                    "foreignField": "_id",
+                    "as": "author"
+                }
+            },
+            doc! {
+                "$unwind": "$author"
+            },
+            doc! {
+                "$project": {
+                    "_id": 1,
+                    "title": 1,
+                    "author_name": "$author.name"
+                }
+            },
+            doc! {
+                "$sort": {
+                    "title": 1
+                }
+            }
+        ];
+
+        let collection = self.db.collection::<mongodb::bson::Document>("books");
+        let cursor = collection.aggregate(pipeline).await?;
+        let docs: Vec<mongodb::bson::Document> = cursor.try_collect().await?;
+        
+        let books: Vec<BookWithAuthor> = docs.iter()
+            .filter_map(|doc| {
+                Some(BookWithAuthor {
+                    id: doc.get_object_id("_id").ok()?.to_string(),
+                    title: doc.get_str("title").ok()?.to_string(),
+                    author_name: doc.get_str("author_name").ok()?.to_string(),
+                })
+            })
+            .collect();
+
+        Ok(books)
     }
 }

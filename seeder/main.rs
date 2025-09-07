@@ -30,6 +30,7 @@ struct AuthorDoc {
     date_of_birth: Option<String>,
     country: Option<String>,
     description: Option<String>,
+    image_path: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -41,6 +42,7 @@ struct BookDoc {
     summary: Option<String>,
     publication_date: Option<String>,
     total_sales: Option<i64>,
+    cover_image_path: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -157,6 +159,7 @@ async fn main() -> Result<()> {
             date_of_birth: dob,
             country,
             description: Some(description),
+            image_path: None,  // Default to None for seeded authors
         });
     }
 
@@ -199,6 +202,7 @@ async fn main() -> Result<()> {
                 summary: Some(summary),
                 publication_date: pub_date,
                 total_sales: Some(0), // Will be calculated from sales
+                cover_image_path: None,  // Default to None for seeded books
             });
             
             book_index += 1;

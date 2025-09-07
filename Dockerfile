@@ -28,9 +28,14 @@ COPY --from=builder /app/target/release/seeder /app/seeder
 COPY Rocket.toml .
 COPY templates ./templates
 
+# Create uploads directory
+RUN mkdir -p /app/uploads && \
+    chown -R appuser:appuser /app/uploads
+
 ENV ROCKET_ADDRESS=0.0.0.0 \
     ROCKET_PORT=8000 \
-    RUST_BACKTRACE=1
+    RUST_BACKTRACE=1 \
+    UPLOADS_DIR=/app/uploads
 EXPOSE 8000
 
 USER appuser
