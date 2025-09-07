@@ -136,7 +136,7 @@ impl AppState {
     // Claves / prefijos
     pub const AUTHORS_SUMMARY_CACHE_KEY: &'static str = "authors:summary";
     fn key_author(author_id: &str) -> String { format!("author:{author_id}") }
-    fn key_book_avg(book_id: &str) -> String { format!("book:{book_id}:avg_score") }
+    pub fn key_book_avg(book_id: &str) -> String { format!("book:{book_id}:avg_score") }
     fn key_search(q: &str, page: i64, per_page: i64) -> String {
         let norm = q.trim().to_lowercase().replace(char::is_whitespace, "+");
         format!("search:books:q:{norm}:p:{page}:pp:{per_page}")
@@ -161,8 +161,8 @@ impl AppState {
             self.cache.set(key, &bytes, ttl).await;
         }
     }
-    async fn cache_del_key(&self, key: &str) { self.cache.del(key).await; }
-    async fn cache_del_pref(&self, prefix: &str) { self.cache.del_prefix(prefix).await; }
+    pub async fn cache_del_key(&self, key: &str) { self.cache.del(key).await; }
+    pub async fn cache_del_pref(&self, prefix: &str) { self.cache.del_prefix(prefix).await; }
 
     //get_authors_summary sin cache
     pub async fn get_authors_summary(&self) -> mongodb::error::Result<Vec<AuthorSummary>> {
@@ -299,6 +299,43 @@ impl AppState {
             Some(Self::TTL_AUTHORS_SUMMARY)
         ).await;
         Ok(data)
+    }
+
+    // --- Promedio sin cache ---
+    pub async fn get_book_average_score(&self, book_id: &mongodb::bson::oid::ObjectId) -> mongodb::error::Result<f64> {
+        use futures_util::TryStreamExt;
+
+        #[derive(serde::Deserialize)]
+        struct AvgDoc { avg: Option<f64> }
+
+        let reviews = self.db.collection::<mongodb::bson::Document>("reviews");
+        let pipeline = vec![
+            doc! { "$match": { "book_id": book_id } },
+            doc! { "$group": { "_id": null, "avg": { "$avg": "$score" } } },
+        ];
+
+        let mut cur = reviews.aggregate(pipeline).await?;
+        if let Some(doc) = cur.try_next().await? {
+            let avg = mongodb::bson::from_document::<AvgDoc>(doc).ok().and_then(|d| d.avg).unwrap_or(0.0);
+            Ok(avg)
+        } else {
+            Ok(0.0)
+        }
+    }
+
+    // --- Promedio con cache ---
+    pub async fn get_book_average_score_cached(&self, book_id: &mongodb::bson::oid::ObjectId) -> mongodb::error::Result<f64> {
+        let key = Self::key_book_avg(&book_id.to_hex());
+
+        if let Some(avg) = self.cache_get_json::<f64>(&key).await {
+            eprintln!("[cache] HIT {key}");
+            return Ok(avg);
+        }
+
+        eprintln!("[cache] MISS {key} -> Mongo");
+        let avg = self.get_book_average_score(book_id).await?;
+        self.cache_set_json(&key, &avg, Some(Self::TTL_BOOK_AVG)).await;
+        Ok(avg)
     }
 
     pub async fn get_top_rated_books(&self) -> mongodb::error::Result<Vec<TopRatedBook>> {
@@ -609,6 +646,26 @@ impl AppState {
         }
         
         Ok(top_selling_books)
+    }
+
+    // --- Búsqueda con cache (para "common queries") ---
+    pub async fn search_books_cached(
+        &self,
+        query: &str,
+        page: i64,
+        per_page: i64
+    ) -> mongodb::error::Result<PaginatedSearchResults> {
+        let key = Self::key_search(query, page, per_page);
+
+        if let Some(cached) = self.cache_get_json::<PaginatedSearchResults>(&key).await {
+            eprintln!("[cache] HIT {key}");
+            return Ok(cached);
+        }
+
+        eprintln!("[cache] MISS {key} -> Mongo");
+        let data = self.search_books(query, page, per_page).await?;
+        self.cache_set_json(&key, &data, Some(Self::TTL_SEARCH)).await;
+        Ok(data)
     }
 
     pub async fn search_books(&self, query: &str, page: i64, per_page: i64) -> mongodb::error::Result<PaginatedSearchResults> {
