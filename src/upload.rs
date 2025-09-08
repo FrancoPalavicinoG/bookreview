@@ -35,7 +35,7 @@ pub struct FileUpload<'r> {
 }
 
 #[post("/", data = "<upload>")]
-pub async fn upload_file(mut upload: Form<FileUpload<'_>>) -> Result<Flash<Redirect>, Flash<Redirect>> {
+pub async fn upload_file(upload: Form<FileUpload<'_>>) -> Result<Flash<Redirect>, Flash<Redirect>> {
     let uploads_dir = env::var("UPLOADS_DIR").unwrap_or_else(|_| "uploads".to_string());
     
     // Create uploads directory if it doesn't exist

@@ -3,17 +3,11 @@
 
 use rocket::{Rocket, Build, State};
 use rocket::http::Method;
-use rocket::fs::FileServer;              // <-- NUEVO: para servir estáticos
 use rocket_dyn_templates::Template;
 use rocket_cors::{CorsOptions, AllowedOrigins, AllowedHeaders};
 use serde_json::json;
 use rocket::form::FromForm;
 use rocket::request::FlashMessage;
-
-
-use std::time::Duration;
-use futures_util::stream::TryStreamExt;
-use mongodb::bson::{doc, oid::ObjectId};
 
 // Declaramos módulos
 mod config;                              // <-- NUEVO
@@ -233,7 +227,7 @@ async fn rocket() -> Rocket<Build> {
         .manage(state)
         .attach(Template::fairing())
         .attach(cors())
-        .mount("/", routes![home, search, health, upload_page, book_avg])
+        .mount("/", routes![home, search_route, health, upload_page, book_avg])
         .mount("/authors", routes::authors::routes())
         .mount("/books", routes::books::routes())
         .mount("/reviews", routes::reviews::routes())

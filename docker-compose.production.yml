@@ -1,9 +1,5 @@
-# Default production setup: Application + Database + Reverse Proxy + Redis Cache
-# This is an alias for docker-compose.production.yml
-# For other deployment scenarios, use:
-# - docker-compose.basic.yml (app + database only)
-# - docker-compose.proxy.yml (app + database + reverse proxy)
-# - docker-compose.production.yml (app + database + reverse proxy + redis cache)
+# Production setup: Application + Database + Reverse Proxy + Redis Cache
+# Full production deployment with caching, reverse proxy, and database
 
 services:
   apache:

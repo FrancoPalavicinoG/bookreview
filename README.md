@@ -7,8 +7,9 @@ This project provides multiple Docker Compose configurations for different deplo
 | File | Description | Services | Access URL | Use Case |
 |------|-------------|----------|------------|----------|
 | `docker-compose.basic.yml` | **Application + Database** | Web + MongoDB | `http://localhost:8000` | Development, Testing |
-| `docker-compose.proxy.yml` | **Application + Database + Reverse Proxy** | Apache + Web + MongoDB | `http://app.localhost` | Production |
-| `docker-compose.yml` | **Default (same as proxy)** | Apache + Web + MongoDB | `http://app.localhost` | Production |
+| `docker-compose.proxy.yml` | **Application + Database + Reverse Proxy** | Apache + Web + MongoDB | `http://app.localhost` | Production (without caching) |
+| `docker-compose.production.yml` | **Application + Database + Reverse Proxy + Redis** | Apache + Web + MongoDB + Redis | `http://app.localhost` | Full Production |
+| `docker-compose.yml` | **Default (same as production)** | Apache + Web + MongoDB + Redis | `http://app.localhost` | Full Production |
 | `docker-compose.dev.yml` | **Legacy Development** | Web + MongoDB | `http://localhost:8000` | Backward compatibility |
 
 ### Quick Commands
@@ -17,8 +18,11 @@ This project provides multiple Docker Compose configurations for different deplo
 # Basic setup (recommended for development)
 docker compose -f docker-compose.basic.yml up -d --build
 
-# Production setup with reverse proxy
-docker compose up -d --build  # Uses docker-compose.yml (proxy setup)
+# Full production setup with Redis caching
+docker compose up -d --build  # Uses docker-compose.yml (production setup)
+
+# Production setup without caching (legacy)
+docker compose -f docker-compose.proxy.yml up -d --build
 ```
 
 ---
@@ -111,23 +115,51 @@ docker compose -f docker-compose.basic.yml down
 
 **Access:** `http://localhost:8000`
 
-### 4.2. Application + Database + Reverse Proxy (Production Setup)
+### 4.2. Application + Database + Reverse Proxy (Basic Production Setup)
 
-**File:** `docker-compose.proxy.yml` or `docker-compose.yml` (default)  
-**Use case:** Production deployments, load balancing, SSL termination  
+**File:** `docker-compose.proxy.yml`  
+**Use case:** Production deployments without caching, load balancing, SSL termination  
 **Services:** Apache reverse proxy + Web application + MongoDB  
 **Static files:** Served by Apache reverse proxy  
+
+```bash
+# Start services
+docker compose -f docker-compose.proxy.yml up -d --build
+
+# View logs
+docker compose -f docker-compose.proxy.yml logs -f apache
+docker compose -f docker-compose.proxy.yml logs -f web
+
+# Stop services
+docker compose -f docker-compose.proxy.yml down
+```
+
+**Important:** Add this line to your `/etc/hosts` file:
+```
+127.0.0.1 app.localhost
+```
+
+**Access:** `http://app.localhost`
+
+### 4.3. Application + Database + Reverse Proxy + Redis (Full Production Setup)
+
+**File:** `docker-compose.production.yml` or `docker-compose.yml` (default)  
+**Use case:** Full production deployments with Redis caching, reverse proxy, and database  
+**Services:** Apache reverse proxy + Web application + MongoDB + Redis cache  
+**Static files:** Served by Apache reverse proxy  
+**Caching:** Redis for improved performance  
 
 ```bash
 # Start services (using default compose file)
 docker compose up -d --build
 
-# Or explicitly use proxy file
-docker compose -f docker-compose.proxy.yml up -d --build
+# Or explicitly use production file
+docker compose -f docker-compose.production.yml up -d --build
 
 # View logs
 docker compose logs -f apache
 docker compose logs -f web
+docker compose logs -f redis
 
 # Stop services
 docker compose down
@@ -140,7 +172,13 @@ docker compose down
 
 **Access:** `http://app.localhost`
 
-### 4.3. Legacy Development Mode
+**Redis Features:**
+- **Cache TTL**: Configurable time-to-live for cached data
+- **Memory Management**: LRU eviction policy with 256MB limit
+- **Persistence**: Redis persistence enabled for cache recovery
+- **Health Checks**: Automatic Redis health monitoring
+
+### 4.4. Legacy Development Mode
 
 **File:** `docker-compose.dev.yml`  
 **Note:** This file is maintained for backward compatibility. Use `docker-compose.basic.yml` for new projects.
@@ -149,7 +187,7 @@ docker compose down
 docker compose -f docker-compose.dev.yml up -d --build
 ```
 
-### 4.4. Seeder (Load Sample Data)
+### 4.5. Seeder (Load Sample Data)
 
 Load sample data into the database for any deployment:
 
@@ -157,35 +195,41 @@ Load sample data into the database for any deployment:
 # For basic setup
 docker compose -f docker-compose.basic.yml run --rm web sh -lc '/app/seeder'
 
-# For proxy setup (default)
+# For production setup with Redis (default)
 docker compose run --rm web sh -lc '/app/seeder'
+
+# For proxy setup (without Redis)
+docker compose -f docker-compose.proxy.yml run --rm web sh -lc '/app/seeder'
 
 # For legacy dev setup
 docker compose -f docker-compose.dev.yml run --rm web sh -lc '/app/seeder'
 ```
 
-### 4.5. Testing Image Uploads
+### 4.6. Testing Image Uploads
 
 1. Go to `/upload` page in the application
 2. Upload book covers and author images
 3. Test static file access:
    - **Basic setup**: `http://localhost:8000/static/filename`
-   - **Proxy setup**: `http://app.localhost/static/filename`
+   - **Production/Proxy setup**: `http://app.localhost/static/filename`
 
 ---
 
 ## 5) Deployment Comparison
 
-| Feature | Basic Setup | Proxy Setup |
-|---------|-------------|-------------|
-| **File** | `docker-compose.basic.yml` | `docker-compose.proxy.yml` |
-| **Services** | Web + MongoDB | Apache + Web + MongoDB |
-| **Static Files** | Served by Rust app | Served by Apache |
-| **URL** | `http://localhost:8000` | `http://app.localhost` |
-| **Use Case** | Development, Testing | Production, Load Balancing |
-| **SSL Support** | Manual setup required | Easy Apache config |
-| **Performance** | Good for dev | Better for production |
-| **Complexity** | Simple | Medium |
+| Feature | Basic Setup | Proxy Setup | Production Setup |
+|---------|-------------|-------------|------------------|
+| **File** | `docker-compose.basic.yml` | `docker-compose.proxy.yml` | `docker-compose.production.yml` |
+| **Services** | Web + MongoDB | Apache + Web + MongoDB | Apache + Web + MongoDB + Redis |
+| **Static Files** | Served by Rust app | Served by Apache | Served by Apache |
+| **Caching** | None | None | Redis |
+| **URL** | `http://localhost:8000` | `http://app.localhost` | `http://app.localhost` |
+| **Use Case** | Development, Testing | Production (basic) | Production (full-featured) |
+| **SSL Support** | Manual setup required | Easy Apache config | Easy Apache config |
+| **Performance** | Good for dev | Better for production | Best for production |
+| **Complexity** | Simple | Medium | Medium-High |
+| **Memory Usage** | Low | Medium | Medium-High |
+| **Cache Features** | - | - | TTL, LRU eviction, persistence |
 
 ---
 
@@ -193,7 +237,7 @@ docker compose -f docker-compose.dev.yml run --rm web sh -lc '/app/seeder'
 
 ### Deployment Architectures
 
-The application supports two main deployment architectures:
+The application supports three main deployment architectures:
 
 **Basic Architecture (Application + Database):**
 ```
@@ -209,11 +253,20 @@ The application supports two main deployment architectures:
        [Static Files Served by Apache]
 ```
 
+**Production Architecture (Application + Database + Reverse Proxy + Redis Cache):**
+```
+[Client] → [Apache:80] → [Rust Web App:8000] → [MongoDB:27017]
+              ↓              ↓ ↑
+       [Static Files]   [Redis Cache:6379]
+       [Served by Apache]
+```
+
 ### Configuration Differences
 
 **Basic Setup (`docker-compose.basic.yml`):**
 - Application serves static files directly
 - `SERVE_STATIC_FILES=true`
+- No caching layer
 - Direct access via `http://localhost:8000`
 - Simpler setup, ideal for development
 
@@ -221,8 +274,18 @@ The application supports two main deployment architectures:
 - Apache serves static files
 - Application focuses on dynamic content
 - `SERVE_STATIC_FILES=false`
+- No caching layer
 - Access via `http://app.localhost`
-- Better for production (caching, SSL, load balancing)
+- Better for basic production
+
+**Production Setup (`docker-compose.production.yml`):**
+- Apache serves static files
+- Application focuses on dynamic content
+- `SERVE_STATIC_FILES=false`
+- Redis caching enabled via `CACHE_URL`
+- Cargo features: `redis-cache`
+- Access via `http://app.localhost`
+- Best for high-performance production
 
 ### Image Upload System
 
@@ -233,12 +296,23 @@ The application supports two main deployment architectures:
 
 ### Environment Variables
 
-| Variable | Description | Basic Setup | Proxy Setup |
-|----------|-------------|-------------|-------------|
-| `SERVE_STATIC_FILES` | Whether app serves static files | `true` | `false` |
-| `UPLOADS_DIR` | Directory for uploaded files | `/app/uploads` | `/app/uploads` |
-| `MONGO_URI` | MongoDB connection string | `mongodb://mongo:27017` | `mongodb://mongo:27017` |
-| `DB_NAME` | Database name | `bookreview_dev` | `bookreview_dev` |
+| Variable | Description | Basic Setup | Proxy Setup | Production Setup |
+|----------|-------------|-------------|-------------|------------------|
+| `SERVE_STATIC_FILES` | Whether app serves static files | `true` | `false` | `false` |
+| `CACHE_URL` | Redis connection string | Not set | Not set | `redis://redis:6379` |
+| `UPLOADS_DIR` | Directory for uploaded files | `/app/uploads` | `/app/uploads` | `/app/uploads` |
+| `MONGO_URI` | MongoDB connection string | `mongodb://mongo:27017` | `mongodb://mongo:27017` | `mongodb://mongo:27017` |
+| `DB_NAME` | Database name | `bookreview_dev` | `bookreview_dev` | `bookreview_dev` |
+
+### Redis Cache Configuration
+
+The production setup includes Redis with the following configuration:
+- **Image**: `redis:7-alpine`
+- **Memory Limit**: 256MB with LRU eviction policy
+- **Persistence**: Append-only file (AOF) enabled
+- **Network**: Optimized with increased socket connections
+- **Health Checks**: Automatic ping monitoring
+- **TTL Support**: Configurable time-to-live for cached data
 
 ---
 
@@ -271,6 +345,9 @@ docker compose -f docker-compose.basic.yml up -d --build
 
 # Proxy setup (Application + Database + Reverse Proxy)
 docker compose -f docker-compose.proxy.yml up -d --build
+
+# Production setup (Application + Database + Reverse Proxy + Redis)
+docker compose -f docker-compose.production.yml up -d --build
 # or using default file
 docker compose up -d --build
 
@@ -286,8 +363,14 @@ docker compose -f docker-compose.basic.yml logs -f web
 docker compose -f docker-compose.basic.yml logs -f mongo
 
 # Proxy setup
+docker compose -f docker-compose.proxy.yml logs -f apache
+docker compose -f docker-compose.proxy.yml logs -f web
+docker compose -f docker-compose.proxy.yml logs -f mongo
+
+# Production setup (default)
 docker compose logs -f apache
 docker compose logs -f web
+docker compose logs -f redis
 docker compose logs -f mongo
 
 # All services at once
@@ -300,10 +383,13 @@ docker compose logs -f
 # Basic setup
 docker compose -f docker-compose.basic.yml down
 
-# Proxy setup (default)
+# Proxy setup
+docker compose -f docker-compose.proxy.yml down
+
+# Production setup (default)
 docker compose down
 
-# Stop and remove volumes (reset database)
+# Stop and remove volumes (reset database and cache)
 docker compose down -v
 ```
 
@@ -315,6 +401,10 @@ docker compose -f docker-compose.basic.yml down -v
 docker compose -f docker-compose.basic.yml up -d --build
 
 # Complete reset with fresh build (proxy)
+docker compose -f docker-compose.proxy.yml down -v
+docker compose -f docker-compose.proxy.yml up -d --build
+
+# Complete reset with fresh build (production)
 docker compose down -v
 docker compose up -d --build
 ```
@@ -326,6 +416,9 @@ docker compose up -d --build
 docker compose -f docker-compose.basic.yml run --rm web sh -lc '/app/seeder'
 
 # Load sample data - proxy setup
+docker compose -f docker-compose.proxy.yml run --rm web sh -lc '/app/seeder'
+
+# Load sample data - production setup
 docker compose run --rm web sh -lc '/app/seeder'
 ```
 
@@ -359,8 +452,8 @@ docker compose -f docker-compose.basic.yml down
 # Add to /etc/hosts first
 echo "127.0.0.1 app.localhost" | sudo tee -a /etc/hosts
 
-# Start proxy setup
-docker compose up -d --build
+# Start proxy setup (without Redis)
+docker compose -f docker-compose.proxy.yml up -d --build
 
 # Test application through proxy
 curl http://app.localhost/health
@@ -370,33 +463,64 @@ curl -I http://app.localhost/static/your-uploaded-file.jpg
 # Should show Apache headers
 
 # Load sample data
+docker compose -f docker-compose.proxy.yml run --rm web sh -lc '/app/seeder'
+
+# Stop
+docker compose -f docker-compose.proxy.yml down
+```
+
+### Testing Production Setup
+
+```bash
+# Add to /etc/hosts first
+echo "127.0.0.1 app.localhost" | sudo tee -a /etc/hosts
+
+# Start production setup with Redis
+docker compose up -d --build
+
+# Test application through proxy
+curl http://app.localhost/health
+
+# Test static file serving through Apache
+curl -I http://app.localhost/static/your-uploaded-file.jpg
+# Should show Apache headers
+
+# Test Redis cache (check logs for cache hits/misses)
+docker compose logs web | grep cache
+
+# Load sample data
 docker compose run --rm web sh -lc '/app/seeder'
 
 # Stop
 docker compose down
 ```
 
-### Comparing Both Setups
+### Comparing All Setups
 
 ```bash
 # Start basic setup on port 8000
 docker compose -f docker-compose.basic.yml up -d --build
 
-# In another terminal, start proxy setup on port 80
+# In another terminal, start proxy setup
+docker compose -f docker-compose.proxy.yml up -d --build
+
+# In another terminal, start production setup  
 docker compose up -d --build
 
 # Now you can compare:
 # Basic: http://localhost:8000
-# Proxy: http://app.localhost
+# Proxy: http://app.localhost (via proxy without cache)
+# Production: http://app.localhost (via proxy with Redis cache)
 
-# Don't forget to stop both when done
+# Don't forget to stop all when done
 docker compose -f docker-compose.basic.yml down
+docker compose -f docker-compose.proxy.yml down
 docker compose down
 ```
 
 ---
 
-## 10) Testing the Reverse Proxy
+## 10) Testing the Reverse Proxy and Redis Cache
 
 ### 1. Setup hosts file
 Add to `/etc/hosts`:
@@ -404,11 +528,11 @@ Add to `/etc/hosts`:
 127.0.0.1 app.localhost
 ```
 
-### 2. Start proxy setup
+### 2. Start production setup
 ```bash
 docker compose up -d --build
 # or explicitly
-docker compose -f docker-compose.proxy.yml up -d --build
+docker compose -f docker-compose.production.yml up -d --build
 ```
 
 ### 3. Test static file serving
@@ -421,7 +545,23 @@ curl -I http://app.localhost/static/your-uploaded-file.jpg
 # Should show Apache headers (Server: Apache/2.4.x)
 ```
 
-### 4. Test application routing
+### 4. Test Redis caching
+```bash
+# Check Redis connection
+docker compose exec redis redis-cli ping
+# Should return: PONG
+
+# Monitor cache activity
+docker compose logs -f web | grep -i cache
+
+# Test cache performance by making repeated requests
+for i in {1..5}; do
+  curl -w "Time: %{time_total}s\n" -o /dev/null -s http://app.localhost/books
+done
+# Subsequent requests should be faster due to caching
+```
+
+### 5. Test application routing
 ```bash
 # Health check through proxy
 curl http://app.localhost/health
@@ -431,18 +571,24 @@ curl http://app.localhost/authors
 curl http://app.localhost/books
 ```
 
-### 5. Compare with basic setup
+### 6. Compare with basic setup
 ```bash
-# Stop proxy setup
+# Stop production setup
 docker compose down
 
 # Start basic setup
 docker compose -f docker-compose.basic.yml up -d --build
 
-# Test direct access
+# Test direct access (no caching)
 curl http://localhost:8000/health
 curl -I http://localhost:8000/static/your-file.jpg
 # Should show Rocket headers (Server: Rocket)
+
+# Performance comparison (no cache)
+for i in {1..5}; do
+  curl -w "Time: %{time_total}s\n" -o /dev/null -s http://localhost:8000/books
+done
+# All requests should take similar time (no caching)
 ```
 
 ---
@@ -631,26 +777,44 @@ For detailed instructions, see [`load-testing/README.md`](load-testing/README.md
 - Check network connectivity between containers
 - Verify environment variables are set correctly
 
-**5. Port conflicts**
+**6. Redis connection issues**
+- Check Redis container is healthy: `docker compose ps redis`
+- Test Redis connectivity: `docker compose exec redis redis-cli ping`
+- Check Redis logs: `docker compose logs redis`
+- Verify `CACHE_URL` environment variable is set correctly
+
+**7. Port conflicts**
 - Basic setup uses port 8000: ensure it's not in use
-- Proxy setup uses port 80: ensure it's not in use
-- Check running processes: `lsof -i :8000` or `lsof -i :80`
+- Production/Proxy setup uses port 80: ensure it's not in use
+- Redis uses port 6379: ensure it's not in use
+- Check running processes: `lsof -i :8000` or `lsof -i :80` or `lsof -i :6379`
 
 ### Debug Commands
 
 ```bash
 # Check container status for different setups
 docker compose -f docker-compose.basic.yml ps
+docker compose -f docker-compose.proxy.yml ps
 docker compose ps
 
 # View all logs for basic setup
 docker compose -f docker-compose.basic.yml logs
 
 # View all logs for proxy setup
+docker compose -f docker-compose.proxy.yml logs
+
+# View all logs for production setup
 docker compose logs
+
+# Test Redis connectivity (production setup only)
+docker compose exec redis redis-cli ping
+docker compose exec redis redis-cli info stats
 
 # Inspect uploads volume
 docker volume inspect bookreview_uploads_data
+
+# Inspect Redis data volume
+docker volume inspect bookreview_redis_data
 
 # Test file upload via curl (basic setup)
 curl -X POST -F "file=@test.jpg" -F "upload_type=book_cover" -F "entity_id=test" http://localhost:8000/upload

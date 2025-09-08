@@ -24,9 +24,10 @@ FROM debian:bookworm-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates tzdata && \
+    ca-certificates tzdata gosu && \
     rm -rf /var/lib/apt/lists/* && \
-    useradd -ms /bin/sh appuser
+    groupadd -g 1000 appuser && \
+    useradd -u 1000 -g 1000 -ms /bin/sh appuser
 
 # Binaries
 COPY --from=builder /app/target/release/bookreview /app/bookreview
@@ -36,9 +37,9 @@ COPY --from=builder /app/target/release/seeder /app/seeder
 COPY Rocket.toml .
 COPY templates ./templates
 
-# Create uploads directory
+# Create uploads directory with proper permissions
 RUN mkdir -p /app/uploads && \
-    chown -R appuser:appuser /app/uploads
+    chown -R appuser:appuser /app
 
 ENV ROCKET_ADDRESS=0.0.0.0 \
     ROCKET_PORT=8000 \
@@ -46,5 +47,15 @@ ENV ROCKET_ADDRESS=0.0.0.0 \
     UPLOADS_DIR=/app/uploads
 EXPOSE 8000
 
-USER appuser
+# Create a script to fix permissions at runtime and start the application
+RUN echo '#!/bin/sh\n\
+# Fix permissions for mounted volumes\n\
+mkdir -p /app/uploads\n\
+chown -R appuser:appuser /app/uploads\n\
+chmod -R 755 /app/uploads\n\
+# Switch to appuser and execute the command\n\
+exec gosu appuser "$@"' > /app/entrypoint.sh && \
+    chmod +x /app/entrypoint.sh
+
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["/app/bookreview"]
