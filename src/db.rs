@@ -1,6 +1,8 @@
-use dotenvy::dotenv;
-use std::env;
+use crate::config::AppConfig;
+use std::sync::Arc;
+use std::time::Duration;
 use futures_util::stream::TryStreamExt;
+use serde::{Serialize, de::DeserializeOwned};
 
 use mongodb::{
     bson::doc,
@@ -9,8 +11,25 @@ use mongodb::{
 };
 use crate::models::{AuthorSummary, TopRatedBook, TopSellingBook, SearchResult, PaginatedSearchResults, BookWithAuthor};
 
+use crate::cache::{Cache, NoopCache};
+#[cfg(feature = "redis-cache")]
+use crate::cache::redis::RedisCache;
+use crate::search::{SearchEngine, NoopSearch};
+
+
+fn build_search(cfg: &AppConfig) -> Arc<dyn SearchEngine> {
+    if let Some(url) = &cfg.search_url {
+        if !url.is_empty() {
+            eprintln!("SEARCH_URL set ({}). Using NoopSearch for now.", url);
+        }
+    }
+    Arc::new(NoopSearch)
+}
+
 pub struct AppState {
     pub db: Database,
+    pub cache: Arc<dyn Cache>,
+    pub search: Arc<dyn SearchEngine>,
 }
 
 pub async fn ensure_indexes(db: &Database) -> mongodb::error::Result<()> {
@@ -69,24 +88,77 @@ pub async fn ensure_indexes(db: &Database) -> mongodb::error::Result<()> {
 }
 
 pub async fn init_db() -> AppState {
-    dotenv().ok();
-    let uri = env::var("MONGO_URI").expect("MONGO_URI not set in .env");
-    let dbname = env::var("DB_NAME").unwrap_or_else(|_| "bookreview".into());
+    let cfg = AppConfig::from_env();
 
-    let mut opts = ClientOptions::parse(&uri).await.expect("Invalid MONGO_URI");
+    let mut opts = ClientOptions::parse(&cfg.mongo_uri).await.expect("Invalid MONGO_URI");
     opts.app_name = Some("bookreview".into());
 
     let client = Client::with_options(opts).expect("Cannot create Mongo client");
-    let db = client.database(&dbname);
+    let db = client.database(&cfg.db_name);
+
+    // Build cache adapter (Redis if feature enabled and CACHE_URL present; otherwise Noop)
+    #[cfg(feature = "redis-cache")]
+    let cache: Arc<dyn Cache> = if let Some(url) = cfg.cache_url.clone() {
+        match RedisCache::new(&url).await {
+            Ok(c) => {
+                println!("[cache] Using Redis at {}", url);
+                Arc::new(c)
+            }
+            Err(e) => {
+                eprintln!("[cache] Redis init failed: {e}. Falling back to Noop.");
+                Arc::new(NoopCache)
+            }
+        }
+    } else {
+        Arc::new(NoopCache)
+    };
+
+    #[cfg(not(feature = "redis-cache"))]
+    let cache: Arc<dyn Cache> = Arc::new(NoopCache);
+
+    // Build search adapter (Noop for now; will switch to ES/OpenSearch behind a feature)
+    let search = build_search(&cfg);
 
     if let Err(e) = ensure_indexes(&db).await {
         eprintln!("Failed to create indexes: {e}");
     }
 
-    AppState { db }
+    AppState { db, cache, search }
 }
 
 impl AppState {
+    // Claves / prefijos
+    pub const AUTHORS_SUMMARY_CACHE_KEY: &'static str = "authors:summary";
+    fn key_author(author_id: &str) -> String { format!("author:{author_id}") }
+    pub fn key_book_avg(book_id: &str) -> String { format!("book:{book_id}:avg_score") }
+    fn key_search(q: &str, page: i64, per_page: i64) -> String {
+        let norm = q.trim().to_lowercase().replace(char::is_whitespace, "+");
+        format!("search:books:q:{norm}:p:{page}:pp:{per_page}")
+    }
+
+    // TTLs (ajústalos a gusto)
+    const TTL_AUTHORS_SUMMARY: std::time::Duration = std::time::Duration::from_secs(300);
+    const TTL_AUTHOR: std::time::Duration = std::time::Duration::from_secs(600);
+    const TTL_BOOK_AVG: std::time::Duration = std::time::Duration::from_secs(120);
+    const TTL_SEARCH: std::time::Duration = std::time::Duration::from_secs(300);
+
+    // --- Helpers JSON <-> bytes ---
+    async fn cache_get_json<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
+        if let Some(bytes) = self.cache.get(key).await {
+            serde_json::from_slice(&bytes).ok()
+        } else {
+            None
+        }
+    }
+    async fn cache_set_json<T: Serialize>(&self, key: &str, value: &T, ttl: Option<std::time::Duration>) {
+        if let Ok(bytes) = serde_json::to_vec(value) {
+            self.cache.set(key, &bytes, ttl).await;
+        }
+    }
+    pub async fn cache_del_key(&self, key: &str) { self.cache.del(key).await; }
+    pub async fn cache_del_pref(&self, prefix: &str) { self.cache.del_prefix(prefix).await; }
+
+    //get_authors_summary sin cache
     pub async fn get_authors_summary(&self) -> mongodb::error::Result<Vec<AuthorSummary>> {
         let pipeline = vec![
             // Lookup books for each author
@@ -204,6 +276,59 @@ impl AppState {
         }
         
         Ok(summaries)
+    }
+
+    //get_authors_summary + cache
+    pub async fn get_authors_summary_cached(&self) -> mongodb::error::Result<Vec<AuthorSummary>> {
+        if let Some(cached) = self.cache_get_json::<Vec<AuthorSummary>>(Self::AUTHORS_SUMMARY_CACHE_KEY).await {
+            eprintln!("[cache] HIT {}", Self::AUTHORS_SUMMARY_CACHE_KEY);
+            return Ok(cached);
+        }
+        eprintln!("[cache] MISS {} -> Mongo", Self::AUTHORS_SUMMARY_CACHE_KEY);
+        let data = self.get_authors_summary().await?;
+        self.cache_set_json(
+            Self::AUTHORS_SUMMARY_CACHE_KEY,
+            &data,
+            Some(Self::TTL_AUTHORS_SUMMARY)
+        ).await;
+        Ok(data)
+    }
+
+    // --- Promedio sin cache ---
+    pub async fn get_book_average_score(&self, book_id: &mongodb::bson::oid::ObjectId) -> mongodb::error::Result<f64> {
+        use futures_util::TryStreamExt;
+
+        #[derive(serde::Deserialize)]
+        struct AvgDoc { avg: Option<f64> }
+
+        let reviews = self.db.collection::<mongodb::bson::Document>("reviews");
+        let pipeline = vec![
+            doc! { "$match": { "book_id": book_id } },
+            doc! { "$group": { "_id": null, "avg": { "$avg": "$score" } } },
+        ];
+
+        let mut cur = reviews.aggregate(pipeline).await?;
+        if let Some(doc) = cur.try_next().await? {
+            let avg = mongodb::bson::from_document::<AvgDoc>(doc).ok().and_then(|d| d.avg).unwrap_or(0.0);
+            Ok(avg)
+        } else {
+            Ok(0.0)
+        }
+    }
+
+    // --- Promedio con cache ---
+    pub async fn get_book_average_score_cached(&self, book_id: &mongodb::bson::oid::ObjectId) -> mongodb::error::Result<f64> {
+        let key = Self::key_book_avg(&book_id.to_hex());
+
+        if let Some(avg) = self.cache_get_json::<f64>(&key).await {
+            eprintln!("[cache] HIT {key}");
+            return Ok(avg);
+        }
+
+        eprintln!("[cache] MISS {key} -> Mongo");
+        let avg = self.get_book_average_score(book_id).await?;
+        self.cache_set_json(&key, &avg, Some(Self::TTL_BOOK_AVG)).await;
+        Ok(avg)
     }
 
     pub async fn get_top_rated_books(&self) -> mongodb::error::Result<Vec<TopRatedBook>> {
@@ -325,7 +450,15 @@ impl AppState {
                 top_books.push(book);
             }
         }
-        
+
+        // Seed per-book average cache using the scores computed by this pipeline.
+        // This makes calls to `get_book_average_score_cached` a HIT.
+        for b in &top_books {
+            let key = Self::key_book_avg(&b.book_id.to_hex());
+            // store the average 
+            self.cache_set_json(&key, &b.average_score, Some(Self::TTL_BOOK_AVG)).await;
+            eprintln!("[cache] SEED {key}");
+        }
         Ok(top_books)
     }
 
@@ -509,6 +642,26 @@ impl AppState {
         }
         
         Ok(top_selling_books)
+    }
+
+    // --- Búsqueda con cache (para "common queries") ---
+    pub async fn search_books_cached(
+        &self,
+        query: &str,
+        page: i64,
+        per_page: i64
+    ) -> mongodb::error::Result<PaginatedSearchResults> {
+        let key = Self::key_search(query, page, per_page);
+
+        if let Some(cached) = self.cache_get_json::<PaginatedSearchResults>(&key).await {
+            eprintln!("[cache] HIT {key}");
+            return Ok(cached);
+        }
+
+        eprintln!("[cache] MISS {key} -> Mongo");
+        let data = self.search_books(query, page, per_page).await?;
+        self.cache_set_json(&key, &data, Some(Self::TTL_SEARCH)).await;
+        Ok(data)
     }
 
     pub async fn search_books(&self, query: &str, page: i64, per_page: i64) -> mongodb::error::Result<PaginatedSearchResults> {

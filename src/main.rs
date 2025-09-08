@@ -3,12 +3,22 @@
 
 use rocket::{Rocket, Build, State};
 use rocket::http::Method;
+use rocket::fs::FileServer;              // <-- NUEVO: para servir estáticos
 use rocket_dyn_templates::Template;
 use rocket_cors::{CorsOptions, AllowedOrigins, AllowedHeaders};
 use serde_json::json;
 use rocket::form::FromForm;
 use rocket::request::FlashMessage;
 
+
+use std::time::Duration;
+use futures_util::stream::TryStreamExt;
+use mongodb::bson::{doc, oid::ObjectId};
+
+// Declaramos módulos
+mod config;                              // <-- NUEVO
+mod cache;                               // <-- NUEVO
+mod search;                              // <-- NUEVO
 mod db;
 mod models;
 mod static_files;
@@ -31,8 +41,8 @@ struct SearchForm {
 
 // ------- Rutas base -------
 #[get("/")]
-async fn home(state: &State<db::AppState>) -> Template {
-    let authors_summary = match state.get_authors_summary().await {
+async fn home(state: &State<db::AppState>) -> Template {   
+    let authors_summary = match state.get_authors_summary_cached().await {
         Ok(summaries) => summaries,
         Err(e) => {
             eprintln!("Error getting authors summary: {}", e);
@@ -68,11 +78,11 @@ async fn home(state: &State<db::AppState>) -> Template {
 }
 
 #[get("/search?<q>&<page>")]
-async fn search(q: String, page: Option<i64>, state: &State<db::AppState>) -> Template {
+async fn search_route(q: String, page: Option<i64>, state: &State<db::AppState>) -> Template {
     let page = page.unwrap_or(1);
     let per_page = 10;
 
-    let search_results = match state.search_books(&q, page, per_page).await {
+    let search_results = match state.search_books_cached(&q, page, per_page).await {
         Ok(results) => Some(results),
         Err(e) => {
             eprintln!("Error searching books: {}", e);
@@ -115,10 +125,30 @@ async fn search(q: String, page: Option<i64>, state: &State<db::AppState>) -> Te
     Template::render("home", &context)
 }
 
+/// GET /books/avg/<id>
+#[get("/books/avg/<id>")]
+async fn book_avg(id: &str, state: &State<db::AppState>) -> String {
+    use mongodb::bson::oid::ObjectId;
+
+    let oid = match ObjectId::parse_str(id) {
+        Ok(o) => o,
+        Err(_) => return "invalid id".into(),
+    };
+
+    match state.get_book_average_score_cached(&oid).await {
+        Ok(avg) => format!("{:.4}", avg),
+        Err(e) => {
+            eprintln!("[avg] error for {id}: {e}");
+            "error".into()
+        }
+    }
+}
+
 #[get("/health")]
 fn health() -> &'static str {
     "ok"
 }
+
 
 #[get("/upload")]
 async fn upload_page(flash: Option<FlashMessage<'_>>, state: &State<db::AppState>) -> Template {
@@ -203,7 +233,7 @@ async fn rocket() -> Rocket<Build> {
         .manage(state)
         .attach(Template::fairing())
         .attach(cors())
-        .mount("/", routes![home, search, health, upload_page])
+        .mount("/", routes![home, search, health, upload_page, book_avg])
         .mount("/authors", routes::authors::routes())
         .mount("/books", routes::books::routes())
         .mount("/reviews", routes::reviews::routes())

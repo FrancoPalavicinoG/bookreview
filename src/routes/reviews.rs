@@ -150,6 +150,13 @@ pub async fn create(state: &State<AppState>, form: Form<ReviewForm>) -> Redirect
         up_votes,
     };
     let _ = r_c.insert_one(&r).await;
+
+    // invalidate caches affected by this review
+    state.cache_del_key(&AppState::key_book_avg(&book_oid.to_hex())).await;
+    state.cache_del_key(AppState::AUTHORS_SUMMARY_CACHE_KEY).await;
+
+    state.cache_del_pref("search:books:").await;
+
     Redirect::to("/reviews")
 }
 
@@ -205,6 +212,9 @@ pub async fn update(state: &State<AppState>, id: &str, form: Form<ReviewForm>) -
     let score = f.score.clamp(1, 5);
     let up_votes = f.up_votes.unwrap_or(0).max(0);
 
+    // load previous review to know previous book_id for cache invalidation
+    let prev_review = r_c.find_one(doc!{"_id": oid}).await.ok().flatten();
+
     let _ = r_c
         .find_one_and_update(
             doc!{"_id": oid},
@@ -217,6 +227,15 @@ pub async fn update(state: &State<AppState>, id: &str, form: Form<ReviewForm>) -
         )
         .await;
 
+    // invalidate caches: previous and new book, plus authors summary
+    if let Some(prev) = prev_review {
+        state.cache_del_key(&AppState::key_book_avg(&prev.book_id.to_hex())).await;
+    }
+    state.cache_del_key(&AppState::key_book_avg(&book_oid.to_hex())).await;
+    state.cache_del_key(AppState::AUTHORS_SUMMARY_CACHE_KEY).await;
+
+    state.cache_del_pref("search:books:").await;
+
     Redirect::to("/reviews")
 }
 
@@ -225,7 +244,16 @@ pub async fn update(state: &State<AppState>, id: &str, form: Form<ReviewForm>) -
 pub async fn delete(state: &State<AppState>, id: &str) -> Redirect {
     let r_c = reviews_col(state);
     if let Ok(oid) = ObjectId::parse_str(id) {
+        // read review to get affected book_id before deleting
+        let prev = r_c.find_one(doc!{"_id": oid}).await.ok().flatten();
         let _ = r_c.delete_one(doc!{"_id": oid}).await;
+
+        // invalidate caches
+        if let Some(r) = prev {
+            state.cache_del_key(&AppState::key_book_avg(&r.book_id.to_hex())).await;
+        }
+        state.cache_del_key(AppState::AUTHORS_SUMMARY_CACHE_KEY).await;
+        state.cache_del_pref("search:books:").await;
     }
     Redirect::to("/reviews")
 }
