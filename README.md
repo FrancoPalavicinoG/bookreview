@@ -225,6 +225,9 @@ docker compose -f docker-compose.proxy.yml run --rm web sh -lc '/app/seeder'
 
 # For legacy dev setup
 docker compose -f docker-compose.dev.yml run --rm web sh -lc '/app/seeder'
+
+# For legacy + redis
+docker compose exec web /app/seeder   
 ```
 
 ### 4.7. Testing Image Uploads
