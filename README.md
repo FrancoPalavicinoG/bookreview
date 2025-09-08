@@ -7,6 +7,7 @@ This project provides multiple Docker Compose configurations for different deplo
 | File | Description | Services | Access URL | Use Case |
 |------|-------------|----------|------------|----------|
 | `docker-compose.basic.yml` | **Application + Database** | Web + MongoDB | `http://localhost:8000` | Development, Testing |
+| `docker-compose.cache.yml` | **Application + Database + Redis** | Web + MongoDB + Redis | `http://localhost:8000` | Development, Testing |
 | `docker-compose.proxy.yml` | **Application + Database + Reverse Proxy** | Apache + Web + MongoDB | `http://app.localhost` | Production (without caching) |
 | `docker-compose.production.yml` | **Application + Database + Reverse Proxy + Redis** | Apache + Web + MongoDB + Redis | `http://app.localhost` | Full Production |
 | `docker-compose.yml` | **Default (same as production)** | Apache + Web + MongoDB + Redis | `http://app.localhost` | Full Production |
@@ -141,7 +142,28 @@ docker compose -f docker-compose.proxy.yml down
 
 **Access:** `http://app.localhost`
 
-### 4.3. Application + Database + Reverse Proxy + Redis (Full Production Setup)
+### 4.3. Application + Database + Redis (Basic + Cache)
+
+**Files:** `docker-compose.basic.yml` + `docker-compose.cache.yml`  
+**Use case:** Development with Redis caching (no reverse proxy)  
+**Services:** Web application + MongoDB + Redis  
+**Access:** `http://localhost:8000`
+
+```bash
+# Start services (basic + cache)
+docker compose -f docker-compose.basic.yml -f docker-compose.cache.yml up -d --build
+
+# View logs
+docker compose -f docker-compose.basic.yml -f docker-compose.cache.yml logs -f web
+docker compose -f docker-compose.basic.yml -f docker-compose.cache.yml logs -f redis
+
+# Stop services
+docker compose -f docker-compose.basic.yml -f docker-compose.cache.yml down
+```
+
+- Enables Redis via `CACHE_URL` and builds the web with `CARGO_FEATURES=redis-cache`.
+
+### 4.4. Application + Database + Reverse Proxy + Redis (Full Production Setup)
 
 **File:** `docker-compose.production.yml` or `docker-compose.yml` (default)  
 **Use case:** Full production deployments with Redis caching, reverse proxy, and database  
@@ -178,7 +200,7 @@ docker compose down
 - **Persistence**: Redis persistence enabled for cache recovery
 - **Health Checks**: Automatic Redis health monitoring
 
-### 4.4. Legacy Development Mode
+### 4.5. Legacy Development Mode
 
 **File:** `docker-compose.dev.yml`  
 **Note:** This file is maintained for backward compatibility. Use `docker-compose.basic.yml` for new projects.
@@ -187,7 +209,7 @@ docker compose down
 docker compose -f docker-compose.dev.yml up -d --build
 ```
 
-### 4.5. Seeder (Load Sample Data)
+### 4.6. Seeder (Load Sample Data)
 
 Load sample data into the database for any deployment:
 
@@ -205,7 +227,7 @@ docker compose -f docker-compose.proxy.yml run --rm web sh -lc '/app/seeder'
 docker compose -f docker-compose.dev.yml run --rm web sh -lc '/app/seeder'
 ```
 
-### 4.6. Testing Image Uploads
+### 4.7. Testing Image Uploads
 
 1. Go to `/upload` page in the application
 2. Upload book covers and author images
