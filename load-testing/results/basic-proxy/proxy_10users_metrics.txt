@@ -1,0 +1,4 @@
+timestamp,cpu_percent,memory_mb,memory_percent,container_name
+2025-09-07 14:25:35,0.00,4.906,0,bookreview_apache
+2025-09-07 14:25:35,0.02,4.578,0,bookreview_web
+2025-09-07 14:25:35,0.80,80.21,1.00,bookreview_mongo

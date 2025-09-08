@@ -6,7 +6,6 @@ use serde::Serialize;
 use futures_util::TryStreamExt;
 use std::collections::HashMap;
 
-use crate::models::{Review, Sale};   // importar todos los modelos
 use crate::routes::reviews::reviews_col;          // helper público para obtener reviews
 use crate::routes::sales::sales_col;              // helper público para obtener sales
 
@@ -162,6 +161,7 @@ pub async fn create(state: &State<AppState>, form: Form<BookForm>) -> Redirect {
         summary: f.summary,
         publication_date: f.publication_date,
         total_sales: None,
+        cover_image_path: None,  // Default to None for new books
     };
     let _ = books_c.insert_one(&b).await;
     // invalidate caches: authors summary and search results

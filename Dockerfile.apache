@@ -1,0 +1,12 @@
+FROM httpd:2.4-alpine
+
+# Copy custom configuration
+COPY apache/httpd.conf /usr/local/apache2/conf/httpd.conf
+
+# Create uploads directory
+RUN mkdir -p /var/www/html/uploads
+
+# Set permissions
+RUN chown -R daemon:daemon /var/www/html
+
+EXPOSE 80

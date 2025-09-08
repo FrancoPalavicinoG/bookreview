@@ -7,8 +7,9 @@ use rocket::fs::FileServer;              // <-- NUEVO: para servir estáticos
 use rocket_dyn_templates::Template;
 use rocket_cors::{CorsOptions, AllowedOrigins, AllowedHeaders};
 use serde_json::json;
-use rocket::form::{Form, FromForm};
-use rocket::response::Redirect;
+use rocket::form::FromForm;
+use rocket::request::FlashMessage;
+
 
 use std::time::Duration;
 use futures_util::stream::TryStreamExt;
@@ -20,6 +21,8 @@ mod cache;                               // <-- NUEVO
 mod search;                              // <-- NUEVO
 mod db;
 mod models;
+mod static_files;
+mod upload;
 mod routes {
     pub mod authors;
     pub mod books;
@@ -146,7 +149,52 @@ fn health() -> &'static str {
     "ok"
 }
 
-// CORS abierto para desarrollo.
+
+#[get("/upload")]
+async fn upload_page(flash: Option<FlashMessage<'_>>, state: &State<db::AppState>) -> Template {
+    let serve_static = static_files::should_serve_static();
+    let uploads_dir = upload::get_uploads_dir();
+    
+    // Fetch all authors and books for dropdowns
+    let authors = match state.get_all_authors().await {
+        Ok(authors) => authors.into_iter().map(|author| {
+            json!({
+                "id": author.id.map(|id| id.to_string()).unwrap_or_default(),
+                "name": author.name,
+                "country": author.country
+            })
+        }).collect::<Vec<_>>(),
+        Err(e) => {
+            eprintln!("Error fetching authors: {}", e);
+            vec![]
+        }
+    };
+    
+    let books = match state.get_all_books_with_authors().await {
+        Ok(books) => books,
+        Err(e) => {
+            eprintln!("Error fetching books: {}", e);
+            vec![]
+        }
+    };
+    
+    let mut context = json!({
+        "serve_static": serve_static,
+        "uploads_dir": uploads_dir,
+        "authors": authors,
+        "books": books
+    });
+    
+    if let Some(flash) = flash {
+        context["flash"] = json!({
+            "kind": flash.kind(),
+            "message": flash.message()
+        });
+    }
+    
+    Template::render("upload", &context)
+}
+
 fn cors() -> rocket_cors::Cors {
     let allowed_origins = AllowedOrigins::all();
 
@@ -174,34 +222,31 @@ fn cors() -> rocket_cors::Cors {
 
 #[launch]
 async fn rocket() -> Rocket<Build> {
-    // 1) Leemos config para decidir si montamos estáticos
-    let cfg = crate::config::AppConfig::from_env();
+    // Initialize uploads directory
+    if let Err(e) = upload::create_uploads_directory() {
+        eprintln!("Warning: Failed to create uploads directory: {}", e);
+    }
 
-    // 2) Creamos el estado (db::init_db() ya usa AppConfig por dentro
-    //    y devuelve AppState con NoopCache/NoopSearch si no hay URLs configuradas)
     let state = db::init_db().await;
 
-    // 3) Construimos Rocket y montamos rutas
-    let mut app = rocket::build()
+    let mut rocket_builder = rocket::build()
         .manage(state)
         .attach(Template::fairing())
         .attach(cors())
-        .mount("/", routes![home, search_route, health, book_avg])
+        .mount("/", routes![home, search, health, upload_page, book_avg])
         .mount("/authors", routes::authors::routes())
         .mount("/books", routes::books::routes())
         .mount("/reviews", routes::reviews::routes())
-        .mount("/sales", routes::sales::routes());
+        .mount("/sales", routes::sales::routes())
+        .mount("/upload", upload::get_upload_routes());
 
-    // 4) Si elegiste servir estáticos desde la app (SERVE_STATIC=app),
-    //    montamos /static -> {STATIC_DIR} solo si existe para evitar panic
-    if cfg.serve_static_from_app {
-        let p = std::path::Path::new(&cfg.static_dir);
-        if p.is_dir() {
-            app = app.mount("/static", FileServer::from(p));
-        } else {
-            eprintln!("[static] Directory '{}' not found; static server disabled", cfg.static_dir);
-        }
+    // Only serve static files if not behind reverse proxy
+    if static_files::should_serve_static() {
+        println!("Serving static files from application");
+        rocket_builder = rocket_builder.mount("/static", static_files::get_static_routes());
+    } else {
+        println!("Static files will be served by reverse proxy");
     }
 
-    app
+    rocket_builder
 }

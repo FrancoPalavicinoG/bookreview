@@ -9,6 +9,7 @@ pub struct Author {
     pub date_of_birth: Option<String>,
     pub country: Option<String>,
     pub description: Option<String>,
+    pub image_path: Option<String>,  // Path to author's image
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -20,6 +21,7 @@ pub struct Book {
     pub summary: Option<String>,
     pub publication_date: Option<String>,
     pub total_sales: Option<i64>, 
+    pub cover_image_path: Option<String>,  // Path to book's cover image
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -97,4 +99,11 @@ pub struct PaginatedSearchResults {
     pub has_next: bool,
     pub has_prev: bool,
     pub query: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BookWithAuthor {
+    pub id: String,
+    pub title: String,
+    pub author_name: String,
 }

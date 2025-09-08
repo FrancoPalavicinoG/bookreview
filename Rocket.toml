@@ -6,9 +6,11 @@ port = 8000
 log_level = "normal"
 # rocket_dyn_templates looks for this key to find your templates
 template_dir = "templates"
+limits = { file = "10MiB", data-form = "10MiB" }
 
 [debug]
 cli_colors = true
 
 [release]
 log_level = "normal"
+limits = { file = "10MiB", data-form = "10MiB" }

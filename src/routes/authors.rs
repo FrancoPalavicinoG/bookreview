@@ -1,5 +1,3 @@
-// La conexión a Mongo se obtiene desde AppState y se consulta directamente aquí.
-
 use rocket::{Route, State};
 use rocket::form::{Form, FromForm};           // Para manejar <form> (UI)
 use rocket_dyn_templates::Template;            // Para renderizar Tera
@@ -113,6 +111,7 @@ pub async fn create(state: &State<AppState>, form: Form<AuthorForm>) -> Template
         date_of_birth: f.date_of_birth,
         country: f.country,
         description: f.description,
+        image_path: None,  // Default to None for new authors
     };
 
     let _ = c.insert_one(&a).await;
