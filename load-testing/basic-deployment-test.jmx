@@ -25,7 +25,7 @@
     </TestPlan>
     <hashTree>
       <!-- Thread Group for 1 user -->
-      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="1 User Thread Group" enabled="false">
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="1 User Thread Group" enabled="true">
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
         <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControllerGui" testclass="LoopController" testname="Loop Controller" enabled="true">
           <boolProp name="LoopController.continue_forever">false</boolProp>
@@ -127,7 +127,7 @@
       </hashTree>
       
       <!-- Thread Group for 10 users -->
-      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="10 Users Thread Group" enabled="false">
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="10 Users Thread Group" enabled="true">
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
         <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControllerGui" testclass="LoopController" testname="Loop Controller" enabled="true">
           <boolProp name="LoopController.continue_forever">false</boolProp>
