@@ -545,21 +545,106 @@ curl -I http://app.localhost/static/your-uploaded-file.jpg
 # Should show Apache headers (Server: Apache/2.4.x)
 ```
 
-### 4. Test Redis caching
+### 4. Test Redis caching 
+
+> Set the base URL:
+
 ```bash
-# Check Redis connection
-docker compose exec redis redis-cli ping
-# Should return: PONG
-
-# Monitor cache activity
-docker compose logs -f web | grep -i cache
-
-# Test cache performance by making repeated requests
-for i in {1..5}; do
-  curl -w "Time: %{time_total}s\n" -o /dev/null -s http://app.localhost/books
-done
-# Subsequent requests should be faster due to caching
+# Proxy
+export BASE_URL="http://app.localhost"
+# Legacy
+# export BASE_URL="http://localhost:8000"
 ```
+
+#### 4.1 Check Redis is up
+```bash
+docker compose exec redis redis-cli ping
+# Expected: PONG
+```
+
+```bash
+docker compose logs --no-log-prefix web | grep "^\[cache\]"
+# Expected: [cache] Using Redis at redis://redis:6379
+```
+
+#### 4.2 Author information (Authors summary cache) 
+```bash
+# First MISS -> Mongo DB, Second redis -> HIT
+curl -s "$BASE_URL/" > /dev/null
+curl -s "$BASE_URL/" > /dev/null
+
+# Check the cached key TTL > 0
+docker compose exec -T redis redis-cli TTL authors:summary
+```
+
+#### 4.3 Most common queries (Search cache)
+```bash
+# (MISS then HIT)
+curl -s "$BASE_URL/search?q=the&page=1" > /dev/null
+curl -s "$BASE_URL/search?q=the&page=1" > /dev/null
+
+# TTL > 0
+docker compose exec -T redis redis-cli TTL "search:books:q:the:p:1:pp:10"
+```
+
+#### 4.4 Reviews Scores (Book average score cache)
+```bash
+# Get DB name from the running app
+DB_NAME=$(docker compose exec -T web sh -lc 'printf "%s" "${DB_NAME:-bookreview_dev}"' | tr -d '\r')
+
+# Pick a book with the most reviews
+BOOK_ID=$(
+  docker compose exec -T mongo mongosh --quiet --eval "
+    const db=db.getSiblingDB('$DB_NAME');
+    const d=db.reviews.aggregate([
+      { \$group:{ _id:'\$book_id', c:{ \$sum:1 } } },
+      { \$sort:{ c:-1 } },
+      { \$limit:1 }
+    ]).toArray()[0];
+    if (d) print(d._id.toHexString());
+  " | tr -d '\r'
+)
+echo "BOOK_ID=$BOOK_ID"
+
+# First MISS -> Mongo DB, Second redis -> HIT
+curl -s "$BASE_URL/books/avg/${BOOK_ID}" && echo
+curl -s "$BASE_URL/books/avg/${BOOK_ID}" && echo
+
+# TTL > 0
+docker compose exec -T redis redis-cli TTL "book:${BOOK_ID}:avg_score"
+```
+
+#### 4.5 CRUD purge test 
+Creating a **new review** for that `BOOK_ID` should purge:
+- `book:&lt;ID&gt;:avg_score` 
+- `authors:summary` 
+- the search cache 
+
+```bash
+# Prime keys 
+curl -s "$BASE_URL/" > /dev/null
+curl -s "$BASE_URL/search?q=the&page=1" > /dev/null
+curl -s "$BASE_URL/books/avg/${BOOK_ID}" > /dev/null
+
+# Create a review (HTTP 303 expected)
+curl -s -i -X POST "$BASE_URL/reviews/create" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "book_id=${BOOK_ID}" \
+  --data-urlencode "text=cache invalidate test" \
+  --data-urlencode "score=5" \
+  --data-urlencode "up_votes=0" | head -n1
+
+# All related keys should be gone (TTL = -2)
+docker compose exec -T redis redis-cli TTL "book:${BOOK_ID}:avg_score"
+docker compose exec -T redis redis-cli TTL authors:summary
+docker compose exec -T redis redis-cli TTL "search:books:q:the:p:1:pp:10"
+```
+
+> To **watch MISS/HIT** in real time, run:
+> ```bash
+> docker compose logs -f web | grep --line-buffered '\[cache\]'
+> ```
+
 
 ### 5. Test application routing
 ```bash
