@@ -1,9 +1,11 @@
 # BookReview Load Testing
 
-This directory contains JMeter load tests and monitoring scripts for the BookReview application. The tests compare performance between two deployment modes:
+This directory contains JMeter load tests and monitoring scripts for the BookReview application. The tests compare performance between multiple deployment modes:
 
 1. **Basic Deployment**: Rust Web Application + MongoDB
-2. **Proxy Deployment**: Apache Reverse Proxy + Rust Web Application + MongoDB
+2. **Cache Deployment**: Rust Web Application + MongoDB + Redis Cache
+3. **Proxy Deployment**: Apache Reverse Proxy + Rust Web Application + MongoDB (legacy)
+4. **Production Deployment**: Apache Reverse Proxy + Rust Web Application + MongoDB + Redis Cache
 
 ## Prerequisites
 
@@ -54,8 +56,45 @@ jmeter -v
 - `GET /health` - Health check endpoint
 - `GET /` - Home page
 - `GET /books` - Books listing
-- `GET /authors` - Authors listing
+- `GET /authors` - Authors listing  
+- `GET /reviews` - Reviews listing
+- `GET /sales` - Sales listing
+- `GET /search?q=book` - Search functionality
 - `GET /static/*` - Static file serving (proxy mode only)
+
+## Quick Start
+
+### Run All Redis-enabled Tests (Recommended)
+
+To run comprehensive load tests for both cache and production deployments with Redis:
+
+```bash
+cd load-testing
+./run-redis-load-tests.sh
+```
+
+This will test both:
+- **Cache Deployment**: App + Database + Redis (port 8000)
+- **Production Deployment**: Proxy + App + Database + Redis (port 80)
+
+### Run Specific Redis Deployment Tests
+
+```bash
+# Test only cache deployment (app + database + redis)
+./run-redis-load-tests.sh cache
+
+# Test only production deployment (proxy + app + database + redis)  
+./run-redis-load-tests.sh production
+```
+
+### Legacy Tests (Without Redis)
+
+For testing basic and proxy deployments without Redis:
+
+```bash
+# Run legacy tests (basic and proxy without Redis)
+./run-load-tests.sh
+```
 
 ## Quick Start
 
@@ -172,17 +211,29 @@ wait $METRICS_PID
 load-testing/
 ├── README.md                          # This file
 ├── basic-deployment-test.jmx           # JMeter test plan for basic deployment
-├── proxy-deployment-test.jmx           # JMeter test plan for proxy deployment
-├── run-load-tests.sh                   # Complete automated test suite
+├── proxy-deployment-test.jmx           # JMeter test plan for production deployment (proxy + app + db + redis)
+├── cache-deployment-test.jmx           # JMeter test plan for cache deployment (app + db + redis)
+├── run-load-tests.sh                   # Legacy automated test suite (without Redis)
+├── run-redis-load-tests.sh             # New automated test suite (with Redis)
 ├── simple-test.sh                      # Run individual JMeter tests
 ├── collect-metrics.sh                  # Collect Docker container metrics
 └── results/                            # Generated test results
-    ├── basic_1users_*.jtl             # JMeter results files
-    ├── basic_1users_*_report/         # JMeter HTML reports
-    ├── basic_metrics_*.csv             # System metrics
-    ├── proxy_1users_*.jtl             # JMeter results files  
-    ├── proxy_1users_*_report/         # JMeter HTML reports
-    ├── proxy_metrics_*.csv             # System metrics
+    ├── cache/                          # Cache deployment results (app + db + redis)
+    │   ├── cache_1users_metrics.txt    # System metrics with CPU, memory, threads
+    │   ├── cache_1users_jmeter.jtl     # JMeter results files
+    │   ├── cache_1users_report/        # JMeter HTML reports
+    │   ├── cache_1users_summary.txt    # Test summary statistics
+    │   └── ... (files for 10, 100, 1000, 5000 users)
+    ├── production/                     # Production deployment results (proxy + app + db + redis)
+    │   ├── production_1users_metrics.txt  # System metrics with CPU, memory, threads
+    │   ├── production_1users_jmeter.jtl   # JMeter results files
+    │   ├── production_1users_report/      # JMeter HTML reports
+    │   ├── production_1users_summary.txt  # Test summary statistics
+    │   └── ... (files for 10, 100, 1000, 5000 users)
+    ├── basic/                          # Legacy: Basic deployment results (app + db only)
+    │   └── basic_*users_*              # Legacy test files
+    ├── basic-proxy/                    # Legacy: Proxy deployment results (proxy + app + db only)
+    │   └── proxy_*users_*              # Legacy test files
     └── load_test_report.md             # Summary report
 ```
 
@@ -195,11 +246,14 @@ load-testing/
 - **Response Codes**: HTTP status code distribution
 
 ### System Metrics (Docker Stats)
+Collected every 5 seconds for each container:
 - **CPU Usage**: Percentage per container
 - **Memory Usage**: MB and percentage per container  
-- **Network I/O**: Received/transmitted data in MB
-- **Disk I/O**: Read/write operations in MB
-- **Process Count**: Number of processes per container
+- **Thread Count**: Number of threads/processes per container
+  - Rust app: Process threads
+  - Apache: Process count
+  - MongoDB: Connection count
+  - Redis: Connected clients count
 
 ## Understanding Results
 

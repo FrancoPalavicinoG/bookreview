@@ -1,0 +1,25 @@
+timestamp,cpu_percent,memory_mb,memory_percent,container_name,threads_count
+2025-09-07 21:55:30,1.8,8.426,0.4,bookreview_apache,2
+2025-09-07 21:55:30,0.8,43.217,2.0,bookreview_web,2
+2025-09-07 21:55:30,2.6,148.13,8.1,bookreview_mongo,4
+2025-09-07 21:55:30,0.5,12.845,0.6,bookreview_redis,1
+2025-09-07 21:56:00,2.0,8.642,0.4,bookreview_apache,2
+2025-09-07 21:56:00,0.9,43.523,2.0,bookreview_web,2
+2025-09-07 21:56:00,2.8,149.87,8.2,bookreview_mongo,4
+2025-09-07 21:56:00,0.6,13.124,0.6,bookreview_redis,1
+2025-09-07 21:56:30,1.7,8.334,0.4,bookreview_apache,2
+2025-09-07 21:56:30,0.7,42.898,1.9,bookreview_web,2
+2025-09-07 21:56:30,2.5,147.56,8.1,bookreview_mongo,4
+2025-09-07 21:56:30,0.4,12.567,0.6,bookreview_redis,1
+2025-09-07 21:57:00,1.9,8.567,0.4,bookreview_apache,2
+2025-09-07 21:57:00,0.8,43.389,2.0,bookreview_web,2
+2025-09-07 21:57:00,2.7,149.44,8.2,bookreview_mongo,4
+2025-09-07 21:57:00,0.5,12.923,0.6,bookreview_redis,1
+2025-09-07 21:57:30,1.6,8.256,0.4,bookreview_apache,2
+2025-09-07 21:57:30,0.6,42.712,1.9,bookreview_web,2
+2025-09-07 21:57:30,2.4,148.21,8.1,bookreview_mongo,4
+2025-09-07 21:57:30,0.3,12.234,0.6,bookreview_redis,1
+2025-09-07 21:58:00,1.8,8.445,0.4,bookreview_apache,2
+2025-09-07 21:58:00,0.7,43.067,2.0,bookreview_web,2
+2025-09-07 21:58:00,2.6,148.67,8.2,bookreview_mongo,4
+2025-09-07 21:58:00,0.4,12.756,0.6,bookreview_redis,1
