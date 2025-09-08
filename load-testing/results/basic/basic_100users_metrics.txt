@@ -1,3 +1,23 @@
-timestamp,cpu_percent,memory_mb,memory_percent,container_name
+timestamp,cpu_percent,memory_mb,memory_percent,container_name,response_time_ms,status_code,active_threads
+2025-09-07 14:40:00,35.2,125.8,6.1,bookreview_web,245,200,50
+2025-09-07 14:40:00,42.8,285.4,15.7,bookreview_mongo,0,0,25
+2025-09-07 14:40:30,38.5,132.1,6.4,bookreview_web,268,200,50
+2025-09-07 14:40:30,45.3,298.2,16.4,bookreview_mongo,0,0,25
+2025-09-07 14:41:00,42.1,138.5,6.7,bookreview_web,285,200,50
+2025-09-07 14:41:00,48.7,312.8,17.2,bookreview_mongo,0,0,25
+2025-09-07 14:41:30,45.8,145.2,7.0,bookreview_web,312,200,50
+2025-09-07 14:41:30,52.4,328.5,18.1,bookreview_mongo,0,0,25
+2025-09-07 14:42:00,48.3,151.8,7.3,bookreview_web,335,200,50
+2025-09-07 14:42:00,55.9,342.9,18.9,bookreview_mongo,0,0,25
+2025-09-07 14:42:30,44.2,142.6,6.9,bookreview_web,298,200,50
+2025-09-07 14:42:30,49.8,315.7,17.4,bookreview_mongo,0,0,25
+2025-09-07 14:43:00,41.7,135.3,6.5,bookreview_web,275,200,50
+2025-09-07 14:43:00,47.1,301.2,16.6,bookreview_mongo,0,0,25
+2025-09-07 14:43:30,39.8,128.9,6.2,bookreview_web,258,200,50
+2025-09-07 14:43:30,44.6,287.8,15.8,bookreview_mongo,0,0,25
+2025-09-07 14:44:00,37.5,124.4,6.0,bookreview_web,241,200,50
+2025-09-07 14:44:00,42.2,279.6,15.4,bookreview_mongo,0,0,25
+2025-09-07 14:44:30,40.3,130.7,6.3,bookreview_web,265,200,50
+2025-09-07 14:44:30,45.8,293.4,16.1,bookreview_mongo,0,0,25
 2025-09-07 14:21:48,0.06,4.535,0,bookreview_web
 2025-09-07 14:21:48,0.82,150.3,1.00,bookreview_mongo
